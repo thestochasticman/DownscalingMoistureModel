@@ -1,0 +1,33 @@
+[project]
+name = "WaterBalanceModel"
+version = "0.1.0"
+description = "Water balance process model for soil moisture downscaling"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "attrs",
+    "cvxpy",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "rich",
+    "scipy",
+    "xarray",
+    "zarr",
+]
+
+[project.optional-dependencies]
+paddockts = [
+    "paddockts @ file:///borevitz_projects/repos/paddock-ts-local",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["WaterBalanceModel"]
