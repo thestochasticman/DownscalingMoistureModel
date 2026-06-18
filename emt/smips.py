@@ -1,0 +1,154 @@
+"""EMT-local SMIPS loader (raw TotalBucket via TERN GeoServer WCS).
+
+Why this exists instead of ``PaddockTS.Environmental.SMIPS.download_smips``:
+PaddockTS points at the old ``landscapes-mapserver.tern.org.au`` WMS, which TERN
+has decommissioned (404). The replacement GeoServer *WMS* only serves a styled
+8-bit palette image, not raw values. The raw daily Cloud-Optimised GeoTIFFs at
+``data.tern.org.au`` require a TERN login.
+
+The GeoServer **WCS** endpoint, however, is public and returns the raw float32
+``TotalBucket`` soil-water field (mm) with a queryable ``time`` axis -- so EMT
+reads SMIPS from there. Everything else (the AOI/cache) still goes through the
+PaddockTS :class:`Query`.
+
+Endpoint:
+    https://geoserver.tern.org.au/geoserver/landscapes/smips/ows
+    coverage ``landscapes__smips_totalbucket`` (also ``landscapes__smips_smindex``)
+"""
+from __future__ import annotations
+
+import os
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date
+from os import makedirs
+from os.path import exists
+
+import pandas as pd
+import requests
+import rioxarray  # noqa: F401  (registers the .rio accessor)
+import xarray as xr
+
+from PaddockTS.query import Query
+
+WCS_URL = "https://geoserver.tern.org.au/geoserver/landscapes/smips/ows"
+COVERAGES = {
+    "totalbucket": "landscapes__smips_totalbucket",   # total profile soil water (mm)
+    "smindex": "landscapes__smips_smindex",            # 0-1 saturation index
+}
+TIMEOUT = 90
+
+get_filename = lambda q, var: f"{q.tmp_dir}/Environmental/{q.stub}_smips_{var}.nc"
+
+
+def _fetch_geotiff(d: date, bbox, coverage: str) -> bytes:
+    """WCS GetCoverage for one day over ``bbox`` -> raw GeoTIFF bytes (raises on error)."""
+    minx, miny, maxx, maxy = bbox
+    params = [
+        ("service", "WCS"), ("version", "2.0.1"), ("request", "GetCoverage"),
+        ("coverageId", coverage), ("format", "image/geotiff"),
+        ("subset", f"Long({minx},{maxx})"),
+        ("subset", f"Lat({miny},{maxy})"),
+        ("subset", f'time("{d.isoformat()}T00:00:00.000Z")'),
+    ]
+    r = requests.get(WCS_URL, params=params, timeout=TIMEOUT)
+    r.raise_for_status()
+    if not (r.content.startswith(b"II") or r.content.startswith(b"MM")):
+        snippet = r.content[:400].decode("utf-8", errors="replace")
+        raise RuntimeError(f"SMIPS WCS error for {d}: {snippet}")
+    return r.content
+
+
+def smips_day(d: date | str, bbox, var: str = "totalbucket") -> xr.DataArray:
+    """Fetch the raw SMIPS field over ``bbox`` for one day as a 2D DataArray (mm)."""
+    if isinstance(d, str):
+        d = date.fromisoformat(d)
+    tiff = _fetch_geotiff(d, bbox, COVERAGES[var])
+    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
+        tmp.write(tiff)
+        tmp_path = tmp.name
+    try:
+        da = rioxarray.open_rasterio(tmp_path, masked=True).squeeze("band", drop=True).load()
+    finally:
+        os.unlink(tmp_path)
+    return da
+
+
+def smips_cube(start: date | str, end: date | str, bbox,
+               var: str = "totalbucket", workers: int = 8,
+               skip_missing: bool = True) -> xr.DataArray:
+    """Fetch a ``(time, y, x)`` raw SMIPS cube over ``bbox`` (inclusive of both ends)."""
+    days = [d.date() for d in pd.date_range(start, end, freq="D")]
+    slices: dict[date, xr.DataArray] = {}
+
+    def fetch(d):
+        return d, smips_day(d, bbox, var=var)
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(fetch, d): d for d in days}
+        for fut in as_completed(futures):
+            d = futures[fut]
+            try:
+                _, da = fut.result()
+                slices[d] = da
+            except (requests.RequestException, RuntimeError) as e:
+                if skip_missing:
+                    print(f"  [{d}] {type(e).__name__}: {e}")
+                else:
+                    raise
+
+    if not slices:
+        raise RuntimeError("No SMIPS days returned data.")
+
+    ordered = sorted(slices.items())
+    times = pd.to_datetime([d for d, _ in ordered])
+    cube = xr.concat([da for _, da in ordered], dim=pd.Index(times, name="time"))
+    cube.name = f"smips_{var}"
+    cube.attrs.update(
+        source="TERN SMIPS via GeoServer WCS", doi="10.25901/b020-nm39",
+        license="CC-BY 4.0", endpoint=WCS_URL, coverage=COVERAGES[var], units="mm",
+    )
+    return cube
+
+
+def download_smips(query: Query, var: str = "totalbucket", workers: int = 8,
+                   reload: bool = False) -> xr.DataArray:
+    """Download (and cache) the raw SMIPS cube for ``query``.
+
+    Args:
+        query: PaddockTS :class:`Query` (provides bbox, dates, and cache dir).
+        var: ``"totalbucket"`` (mm, the downscaling target) or ``"smindex"``.
+        workers: Concurrent per-day WCS requests.
+        reload: If True, ignore any cached file and refetch.
+
+    Returns:
+        ``(time, y, x)`` DataArray of raw SMIPS values, also written to
+        ``{query.tmp_dir}/Environmental/{query.stub}_smips_{var}.nc``.
+    """
+    filename = get_filename(query, var)
+    if not reload and exists(filename):
+        print(f"  cached: {filename}")
+        with xr.open_dataset(filename) as ds:
+            name = [v for v in ds.data_vars if v != "spatial_ref"][0]
+            return ds[name].load()
+
+    makedirs(f"{query.tmp_dir}/Environmental", exist_ok=True)
+    print(f"  fetching SMIPS ({var}) for bbox {query.bbox} ({query.start} → {query.end})...", flush=True)
+    cube = smips_cube(query.start, query.end, tuple(query.bbox), var=var, workers=workers).compute()
+    cube.to_dataset(name=cube.name).to_netcdf(filename)
+    print(f"  saved: {filename} ({cube.sizes['time']} days, "
+          f"{cube.sizes.get('y')}x{cube.sizes.get('x')} px)")
+    return cube
+
+
+def test():
+    from PaddockTS.query import Query
+    q = Query.from_lat_lon(-35.41928, 147.60408, 2.0,
+                           date(2020, 6, 1), date(2020, 6, 7), stub="SMIPS_TEST")
+    cube = download_smips(q)
+    print(cube)
+    print("mean per day (mm):\n", cube.mean(("x", "y")).to_pandas().round(2))
+
+
+if __name__ == "__main__":
+    test()

@@ -3,18 +3,14 @@ name = "emt"
 version = "0.1.0"
 description = "Downscaling SMIPS ~1 km soil moisture to ~30 m topographic resolution, trained and validated against the OzNet Murrumbidgee in-situ network."
 requires-python = ">=3.11"
+# EMT runs inside the PaddockTS environment and imports PaddockTS directly for
+# all SMIPS / terrain downloads (see emt.queries / emt.covariates). Install
+# PaddockTS (the parallel paddock-ts-local repo) editable into the same env;
+# it provides numpy/pandas/xarray/rioxarray/geopandas/rasterio/pysheds/etc.
+# Listed below are only the extras EMT adds on top.
 dependencies = [
-    "numpy",
-    "pandas",
-    "xarray",
-    "rioxarray",
-    "geopandas",
-    "scikit-learn",
-    "requests",
-    "xlrd",          # legacy .xls reader for OzNet files
-    "pysheds",       # flow accumulation / TWI
-    "rasterio",
-    "matplotlib",
+    "scikit-learn",  # the downscaling regression model
+    "xlrd",          # legacy .xls reader for OzNet in-situ files
 ]
 
 [build-system]
