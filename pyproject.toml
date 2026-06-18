@@ -1,33 +1,25 @@
 [project]
-name = "WaterBalanceModel"
+name = "emt"
 version = "0.1.0"
-description = "Water balance process model for soil moisture downscaling"
-readme = "README.md"
-license = "MIT"
+description = "Downscaling SMIPS ~1 km soil moisture to ~30 m topographic resolution, trained and validated against the OzNet Murrumbidgee in-situ network."
 requires-python = ">=3.11"
 dependencies = [
-    "attrs",
-    "cvxpy",
-    "matplotlib",
     "numpy",
     "pandas",
-    "rich",
-    "scipy",
     "xarray",
-    "zarr",
-]
-
-[project.optional-dependencies]
-paddockts = [
-    "paddockts @ file:///borevitz_projects/repos/paddock-ts-local",
+    "rioxarray",
+    "geopandas",
+    "scikit-learn",
+    "requests",
+    "xlrd",          # legacy .xls reader for OzNet files
+    "pysheds",       # flow accumulation / TWI
+    "rasterio",
+    "matplotlib",
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.targets.wheel]
-packages = ["WaterBalanceModel"]
+[tool.setuptools.packages.find]
+include = ["emt*"]
