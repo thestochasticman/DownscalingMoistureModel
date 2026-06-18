@@ -1,6 +1,7 @@
-# data cache (downloaded OzNet / SMIPS / terrain)
-data/
+# data cache: keep summaries (.md) + folder structure, exclude raw data files
 *.xls
+*.xlsx
+*.csv
 *.nc
 *.zarr/
 *.tif
