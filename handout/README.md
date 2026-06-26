@@ -22,6 +22,7 @@ linking to its source; the figures are reproducible from
 | 3b — fine predictors | [`covariates.py`](modules/covariates.py.md) | 30 m terrain stack (elevation, slope, northness/eastness, TWI, HLI, accumulation) |
 | 4 — training table | [`features.py`](modules/features.py.md) | one row per station-day: target + SMIPS + terrain + seasonality |
 | 5 — model | [`model.py`](modules/model.py.md) | Random Forest + **leave-site-out** cross-validation |
+| 6 — downscale | [`downscale.py`](modules/downscale.py.md) | apply the model per pixel → a **30 m soil-moisture field** |
 
 The model:
 
@@ -123,6 +124,61 @@ training sites, and the model uses it.
 
 ---
 
+## Stage 6 — the 30 m product over Yanco
+
+Applying the model per pixel gives the actual deliverable: a **30 m root-zone
+soil-moisture map**. To keep the test honest, the model here is trained on
+**Kyeamba + Adelong only and Yanco is fully held out** — so the map *and* its
+validation are genuine transfer to a catchment the model never saw (the real
+downscaling use case). Date: **2008-07-31** (all 12 Yanco stations report).
+
+![Downscaled Yanco](figures/downscale_yanco.png)
+
+- **(a) → (b)/(c)** The blocky ~1 km SMIPS input is sharpened to a 30 m field;
+  the zoom **(c)** reveals dendritic drainage structure the coarse input cannot
+  resolve. This terrain-driven detail is the entire point of downscaling.
+- **(d)** Held-out validation at the 12 Yanco stations:
+
+  | metric | value | reading |
+  |---|---|---|
+  | RMSE | 11.5 % | dominated by bias |
+  | **ubRMSE** | **2.4 %** | bias-removed error is small — the spatial pattern transfers |
+  | bias | **+11.3 %** | model trained on wetter uplands over-predicts the semi-arid Yanco plains |
+  | r | 0.41 | moderate across 12 stations |
+
+**Interpretation.** Transferring to an unseen catchment, the *relative* structure
+is captured well (ubRMSE 2.4 %) but the *absolute level* carries a large regional
+bias. This is the same per-station level bias seen in Stage 5, now in its
+starkest form (whole region held out): SMIPS + terrain do not encode the local
+soil/climate baseline that sets absolute moisture. → see **Future work**.
+
+> **Metrics convention used throughout.** `RMSE` total error; `ubRMSE` =
+> √(RMSE²−bias²), the bias-removed error (the standard soil-moisture skill
+> number); `bias` = mean(pred−obs); `r` Pearson; `r²` = 1−SS_res/SS_tot (can go
+> negative when bias dominates). Headline *generalisation* skill is always the
+> **leave-site-out / leave-region-out** value — never an in-sample fit.
+
+---
+
+## Future work
+
+1. **SLGA soil covariate (highest priority).** The dominant remaining error is an
+   absolute *level* bias on transfer (Stage 6: +11 % over Yanco). Static soil
+   properties — clay/sand fraction, bulk density from the
+   [Soil and Landscape Grid of Australia](https://www.clw.csiro.au/aclep/soilandlandscapegrid/)
+   (SLGA, ~90 m) — most plausibly encode the baseline that SMIPS + terrain miss.
+   They would enter as additional static per-pixel features in
+   [`features.py`](modules/features.py.md) / [`downscale.py`](modules/downscale.py.md);
+   no architecture change. *Not implemented yet.*
+2. **Mass conservation.** Constrain the 30 m field to aggregate back to a coarse
+   reference per cell (decompose into cell-mean + terrain anomaly, rebase the
+   mean). Needs a coarse reference in % units — see
+   [`downscale.py` doc](modules/downscale.py.md#documented-future-work-not-yet-implemented).
+3. **Bias correction / mixed effects.** A per-site offset (or quantile mapping to
+   SMIPS climatology) would absorb the regional level bias directly.
+
+---
+
 ## Reproduce the figures
 
 From the repo root (with the `paddockts` conda env active so `PaddockTS` and the
@@ -136,11 +192,12 @@ This loads (or rebuilds) the Kyeamba 2020 Jun–Jul training table, reconstructs
 the pre-fix SMIPS values to show the correction, runs the leave-site-out CV, and
 overwrites the three PNGs in [`figures/`](figures/).
 
-The catchment figure comes from the expanded table
+The catchment and Stage 6 figures come from the expanded table
 (`data/train_catchment_2006_2010.csv`):
 
 ```bash
-PYTHONPATH=. python handout/plot_catchment.py
+PYTHONPATH=. python handout/plot_catchment.py    # catchment_results.png
+PYTHONPATH=. python handout/plot_downscale.py    # downscale_yanco.png (30 m map)
 ```
 
 > The module write-ups in [`modules/`](modules/) summarise each source file; the
