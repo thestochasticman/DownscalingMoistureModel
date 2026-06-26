@@ -147,6 +147,25 @@ def _main_sheet_name(book: xlrd.book.Book) -> str:
     return book.sheet_names()[0]
 
 
+def _unique_headers(names: list[str]) -> list[str]:
+    """Make column names unique (repeats get a ``.1``/``.2``… suffix).
+
+    Some OzNet files repeat a header or leave it blank; keyed by name those
+    columns would collapse into one. The first occurrence keeps its exact name
+    (so e.g. ``'SM 0-30cm'`` stays matchable), later repeats are suffixed.
+    """
+    seen: dict[str, int] = {}
+    out = []
+    for n in names:
+        if n in seen:
+            seen[n] += 1
+            out.append(f"{n}.{seen[n]}")
+        else:
+            seen[n] = 0
+            out.append(n)
+    return out
+
+
 def parse_xls(path: str | Path) -> pd.DataFrame:
     """Parse one OzNet .xls into a tidy sub-daily DataFrame.
 
@@ -165,11 +184,14 @@ def parse_xls(path: str | Path) -> pd.DataFrame:
     if sheet.nrows < 4:
         return pd.DataFrame()
 
-    # Row 1 = headers (row 0 is the site title).
-    headers = [str(sheet.cell_value(1, c)).strip() for c in range(sheet.ncols)]
+    # Row 1 = headers (row 0 is the site title). Collect columns positionally
+    # (not keyed by header name) and uniquify the names, so files with a
+    # duplicate or blank header don't collapse two columns into one.
+    headers = _unique_headers([str(sheet.cell_value(1, c)).strip()
+                               for c in range(sheet.ncols)])
 
     times = []
-    cols: dict[str, list] = {h: [] for h in headers[1:]}
+    data: list[list] = [[] for _ in range(1, sheet.ncols)]
     for r in range(3, sheet.nrows):
         serial = sheet.cell_value(r, 0)
         if serial in ("", None):
@@ -179,14 +201,15 @@ def parse_xls(path: str | Path) -> pd.DataFrame:
         except (ValueError, TypeError):
             continue
         times.append(dt)
-        for c in range(1, sheet.ncols):
+        for j, c in enumerate(range(1, sheet.ncols)):
             val = sheet.cell_value(r, c)
-            cols[headers[c]].append(val if val != "" else float("nan"))
+            data[j].append(val if val != "" else float("nan"))
 
     if not times:
         return pd.DataFrame()
 
-    df = pd.DataFrame(cols, index=pd.DatetimeIndex(times, name="time"))
+    df = pd.DataFrame(dict(zip(headers[1:], data)),
+                      index=pd.DatetimeIndex(times, name="time"))
     df = df.apply(pd.to_numeric, errors="coerce")
     df = df.mask(df <= MISSING_FLAG)  # -99 (and anything below) -> NaN
     return df
