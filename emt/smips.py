@@ -17,6 +17,7 @@ Endpoint:
 """
 from __future__ import annotations
 
+import math
 import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -38,12 +39,42 @@ COVERAGES = {
 }
 TIMEOUT = 90
 
+# SMIPS native grid (EPSG:4326), from the WCS DescribeCoverage: envelope outer
+# edges + per-pixel offset vectors. GeoServer resamples every WCS GetCoverage to
+# fit an INTEGER pixel count into the *requested* envelope, so a point's sampled
+# value depends on the request window (a narrow per-station box and a wide
+# cluster box land on differently-shifted grids and can pick different ~1 km
+# cells -- observed up to ~40% disagreement). Snapping the request bbox to these
+# native cell boundaries removes the resampling: each window returns the true
+# native pixels, so sampling is window-independent and per-station == cluster.
+NATIVE_WEST = 112.90499114990234
+NATIVE_SOUTH = -43.73500061035156
+NATIVE_DX = 0.009997566018978103    # Long step
+NATIVE_DY = 0.009997121616580312    # Lat step (magnitude)
+
+
+def snap_bbox(bbox, pad: int = 1):
+    """Expand a ``(minx, miny, maxx, maxy)`` bbox outward to native SMIPS grid
+    lines, plus ``pad`` cells of margin. Idempotent up to the added padding, so
+    call it once per request (not inside the per-day fetch)."""
+    minx, miny, maxx, maxy = bbox
+    i0 = math.floor((minx - NATIVE_WEST) / NATIVE_DX) - pad
+    i1 = math.ceil((maxx - NATIVE_WEST) / NATIVE_DX) + pad
+    j0 = math.floor((miny - NATIVE_SOUTH) / NATIVE_DY) - pad
+    j1 = math.ceil((maxy - NATIVE_SOUTH) / NATIVE_DY) + pad
+    return [NATIVE_WEST + i0 * NATIVE_DX, NATIVE_SOUTH + j0 * NATIVE_DY,
+            NATIVE_WEST + i1 * NATIVE_DX, NATIVE_SOUTH + j1 * NATIVE_DY]
+
 get_filename = lambda q, var: f"{q.tmp_dir}/Environmental/{q.stub}_smips_{var}.nc"
 
 
 def _fetch_geotiff(d: date, bbox, coverage: str) -> bytes:
     """WCS GetCoverage for one day over ``bbox`` -> raw GeoTIFF bytes (raises on error)."""
     minx, miny, maxx, maxy = bbox
+    # The caller is expected to have snapped ``bbox`` to the native grid (see
+    # snap_bbox); scaleFactor is intentionally NOT sent -- it is a no-op on this
+    # GeoServer (identical output with and without it) and does not control
+    # resampling. Grid alignment is what makes sampling window-independent.
     params = [
         ("service", "WCS"), ("version", "2.0.1"), ("request", "GetCoverage"),
         ("coverageId", coverage), ("format", "image/geotiff"),
@@ -63,7 +94,7 @@ def smips_day(d: date | str, bbox, var: str = "totalbucket") -> xr.DataArray:
     """Fetch the raw SMIPS field over ``bbox`` for one day as a 2D DataArray (mm)."""
     if isinstance(d, str):
         d = date.fromisoformat(d)
-    tiff = _fetch_geotiff(d, bbox, COVERAGES[var])
+    tiff = _fetch_geotiff(d, snap_bbox(bbox), COVERAGES[var])
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
         tmp.write(tiff)
         tmp_path = tmp.name
