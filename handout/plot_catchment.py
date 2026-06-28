@@ -1,10 +1,10 @@
-"""Figure for the expanded Yanco+Kyeamba+Adelong 2006-2010 build.
+"""Figures for the expanded Yanco+Kyeamba+Adelong 2006-2010 training set.
 
 Run from repo root::  PYTHONPATH=. python handout/plot_catchment.py
 
-Shows why spatial spread rescued the model: cross-site SMIPS variation, the
-leave-site-out fit, the feature-importance shift vs the Kyeamba-only run, and
-the per-station bias that remains.
+Produces: between-site SMIPS distributions, the leave-site-out fit, the
+feature-importance comparison against the single-cluster (Kyeamba) run, and the
+residual per-station bias.
 """
 from __future__ import annotations
 from pathlib import Path

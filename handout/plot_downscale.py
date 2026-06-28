@@ -1,8 +1,8 @@
-"""Stage 6 demo: downscale SMIPS to 30 m over Yanco and validate against in-situ.
+"""Stage 6: downscale SMIPS to 30 m over Yanco and validate against in-situ.
 
-HONEST setup: the model is trained on Kyeamba + Adelong only (Yanco fully held
-out), so both the map and the station validation are genuine spatial transfer to
-an unseen catchment -- the real downscaling use case.
+Out-of-sample configuration: the model is trained on Kyeamba + Adelong only,
+with Yanco withheld entirely, so the field and its station validation represent
+transfer to an unobserved catchment.
 
 Run from repo root::  PYTHONPATH=. python handout/plot_downscale.py
 """

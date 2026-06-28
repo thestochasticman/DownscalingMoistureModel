@@ -1,204 +1,218 @@
-# Downscaling SMIPS soil moisture to 30 m — approach & results
+# Statistical downscaling of SMIPS soil moisture to 30 m
 
-**Goal.** Take TERN's **SMIPS** profile soil-water field (`TotalBucket`, mm,
-~1 km daily) and **downscale it to ~30 m** — the resolution of the Copernicus
-DEM — by learning, from in-situ ground truth, how fine-scale terrain redistributes
-moisture within each coarse cell.
+## Objective
 
-This handout walks the pipeline module by module, then shows what the rebuilt
-model actually does (and where it falls short). Each module has a short write-up
-linking to its source; the figures are reproducible from
-[`plot_results.py`](plot_results.py).
+Produce a 30 m daily estimate of root-zone soil moisture by statistically
+downscaling the TERN SMIPS `TotalBucket` profile soil-water product (mm,
+≈1 km, daily). A regression model is trained against in-situ observations to
+learn how fine-scale terrain redistributes moisture within each ≈1 km SMIPS
+cell; the model is then applied at the 30 m resolution of the Copernicus DEM.
 
----
+This document describes the processing pipeline, two data-quality issues
+identified and resolved during development, and the cross-validation and
+spatial-transfer results obtained to date. Each pipeline component has a
+corresponding note under [`modules/`](modules/); all figures are reproducible
+(see [Reproducibility](#reproducibility)).
 
-## The pipeline
+## Pipeline
 
-| stage | module | what it produces |
+| Stage | Module | Output |
 |---|---|---|
-| 1 — ground truth | [`oznet.py`](modules/oznet.py.md) | daily root-zone (0–90 cm) soil moisture per OzNet station — the **target** |
-| 2 — study areas | [`queries.py`](modules/queries.py.md) | PaddockTS `Query` windows (per-station + focus catchments) |
-| 3a — coarse input | [`smips.py`](modules/smips.py.md) | raw SMIPS `TotalBucket` cube (mm) — **the field being downscaled** |
-| 3b — fine predictors | [`covariates.py`](modules/covariates.py.md) | 30 m terrain stack (elevation, slope, northness/eastness, TWI, HLI, accumulation) |
-| 4 — training table | [`features.py`](modules/features.py.md) | one row per station-day: target + SMIPS + terrain + seasonality |
-| 5 — model | [`model.py`](modules/model.py.md) | Random Forest + **leave-site-out** cross-validation |
-| 6 — downscale | [`downscale.py`](modules/downscale.py.md) | apply the model per pixel → a **30 m soil-moisture field** |
+| 1. Ground truth | [`oznet.py`](modules/oznet.py.md) | Daily root-zone (0–90 cm) soil moisture per OzNet station (the regression target) |
+| 2. Study areas | [`queries.py`](modules/queries.py.md) | PaddockTS `Query` extents (per-station windows and focus catchments) |
+| 3a. Coarse predictor | [`smips.py`](modules/smips.py.md) | SMIPS `TotalBucket` field (mm), the quantity being downscaled |
+| 3b. Fine predictors | [`covariates.py`](modules/covariates.py.md) | 30 m terrain covariates (elevation, slope, northness/eastness, TWI, HLI, flow accumulation) |
+| 4. Feature assembly | [`features.py`](modules/features.py.md) | Training table: one record per station-day (target, SMIPS, terrain, seasonality) |
+| 5. Model | [`model.py`](modules/model.py.md) | Random Forest regressor with leave-site-out cross-validation |
+| 6. Downscaling | [`downscale.py`](modules/downscale.py.md) | Per-pixel application of the model to produce a 30 m field |
 
-The model:
+## Model specification
 
 ```
 sm_rootzone_pct  ~  smips_totalbucket + terrain(...) + doy_sin + doy_cos
 ```
 
-`lat`/`lon` are intentionally excluded as features (they would leak station
-identity); `station` is used only as the spatial CV group.
+Station coordinates (`lat`/`lon`) are excluded from the feature set to prevent
+the model from encoding station identity; `station` is retained solely as the
+grouping variable for spatial cross-validation. Reported generalisation skill is
+always the leave-site-out (or leave-region-out) estimate, never an in-sample
+fit.
 
----
+## Data quality: SMIPS WCS grid resampling
 
-## A data-quality fix that mattered
+The TERN GeoServer Web Coverage Service resamples each `GetCoverage` response to
+fit an integer pixel count within the requested bounding box. Consequently the
+grid origin and cell size of the returned raster depend on the request extent,
+and a fixed geographic point can fall in different ≈1 km cells depending on the
+window requested. For station K6 the sampled value was 43.7, 49.6, or 61.6 mm
+across three request windows for the same location and date (a ≈40 % range).
 
-While validating the pipeline we found TERN's GeoServer **WCS resamples every
-request to the requested bounding box**, so a station's SMIPS value depended on
-*how much area we asked for*. Station K6 came back as **43.7 / 49.6 / 61.6 mm**
-for three different windows — same place, same day. The fix
-([`smips.py` → `snap_bbox`](modules/smips.py.md)) aligns every request to the
-native ~1 km grid, making sampling window-independent and returning the true
-native pixel.
+The resolution (`snap_bbox` in [`smips.py`](modules/smips.py.md)) aligns every
+request to the native SMIPS grid, taken from the WCS `DescribeCoverage`
+(origin 112.90499°E, −43.73500°N; cell size 0.0099976°). With an aligned
+envelope the server's integer-pixel fit coincides with the native grid, making
+the sampled value independent of the request window. (The `scaleFactor=1`
+parameter was tested and confirmed to have no effect.)
 
-![SMIPS correction](figures/smips_correction.png)
+![SMIPS sampling correction](figures/smips_correction.png)
 
-**(a)** Old vs new SMIPS. Three stations sit on the 1:1 line — their old window
-already happened to land on the right cell. **Only K6 moved.** **(b)** K6 shifted
-**+15.4 mm** on average; the others ≈0. **(c)** Target vs corrected SMIPS: the
-four sites form near-horizontal bands — SMIPS varies a lot *within* a site but
-barely separates the sites' moisture *levels*. That detail drives the result
-below.
+- **(a)** Pre- and post-correction SMIPS values. Three of the four stations were
+  unaffected (their original windows already resolved to the correct cell);
+  station K6 changed.
+- **(b)** Mean per-station change: K6 +15.4 mm, others ≈0.
+- **(c)** Corrected SMIPS against the target. The four Kyeamba stations occupy
+  near-horizontal bands: SMIPS varies within a site but provides limited
+  separation between site-mean moisture levels. This is relevant to the result
+  in the next section.
 
----
+Cached SMIPS extracted before this correction used window-dependent values; the
+training table and model were rebuilt after clearing the cache.
 
-## What the model does — and where it breaks
+## Initial evaluation: single-cluster training set
 
-The headline metric is **leave-site-out CV**: train on every station but one,
-predict the held-out one (the honest test, since at inference the model meets
-unseen locations).
+The model was first evaluated on four Kyeamba stations (June–July 2020).
+Leave-site-out cross-validation yielded negative pooled skill
+(r = −0.45, r² = −1.16), and SMIPS received negligible feature importance
+(0.006).
 
-![Leave-site-out CV](figures/leave_site_out_cv.png)
+![Leave-site-out cross-validation, Kyeamba](figures/leave_site_out_cv.png)
 
-- **(a)** Each held-out site is a **tight diagonal sliver** (day-to-day shape is
-  tracked) but **offset from the 1:1 line**. K12 is extreme: observed ~33%,
-  predicted ~28%.
-- **(b)** In numbers: within-site `r ≈ 0.9` everywhere, but **bias** is large
-  (K10 +3.5, K12 −4.6). High correlation **+** large bias = the negative pooled
-  `r²`.
-- **(c)** Feature importance: terrain ≈ 88%, **SMIPS ≈ 0.006**. With `lat`/`lon`
-  excluded, the forest has only terrain to set a site's level — and terrain
-  doesn't encode it here.
+- **(a)** Predicted versus observed for each held-out station. Per-station
+  correlation is high (each cluster aligns along the diagonal) but offset from
+  the 1:1 line.
+- **(b)** Per-station correlation is ≈0.9 throughout, while per-station bias is
+  large (K10 +3.5, K12 −4.6). High correlation combined with large bias produces
+  the negative pooled r².
+- **(c)** Feature importance is dominated by terrain (≈88 %); SMIPS contributes
+  ≈0.006.
 
-![Per-site time series](figures/per_site_timeseries.png)
+![Per-site time series, Kyeamba](figures/per_site_timeseries.png)
 
-Per site, the prediction **follows the temporal shape** but sits at the **wrong
-level** — clearest at K12, where the prediction floats well below the
-observations.
+The per-station time series show that temporal dynamics are reproduced while the
+absolute level is offset.
 
-### Diagnosis
-The pipeline is correct; the CV is degenerate because **four stations packed into
-~one SMIPS pixel** give the model no cross-site signal. It learns each site's
-*dynamics* but cannot place an unseen site's *absolute level*. This is a
-data-scope limit, not a code bug.
+**Assessment.** The four stations lie within approximately one SMIPS cell, so
+the coarse predictor carries no between-station signal. The model reproduces
+temporal dynamics but cannot determine the absolute level of a held-out station.
+This is a limitation of training-set spatial coverage rather than of the
+pipeline, and motivates expansion to multiple catchments.
 
-### Next step
-Expand the training table across the catchment — **Yanco + Kyeamba + Adelong**,
-more of 2006–2010 — so SMIPS actually varies between training sites. The
-[cluster-fetch optimisation](modules/features.py.md) makes that broader,
-multi-year build cheap.
+## Expanded training set: Yanco, Kyeamba, Adelong (2006–2010)
 
----
+The training table was rebuilt across the three clustered catchments
+(30 stations, 40,590 station-days). SMIPS was retrieved as three site-level
+cubes via cluster-fetch ([`features.py`](modules/features.py.md)). The sites are
+separated by 100–150 km, providing between-site variation in the coarse
+predictor.
 
-## Scaling up fixed it — Yanco + Kyeamba + Adelong, 2006–2010
+![Catchment cross-validation results](figures/catchment_results.png)
 
-Rebuilding across all three clustered sites — **30 stations, 40,590 station-days**
-(SMIPS fetched as just **3 site cubes** via cluster-fetch) — confirms the
-approach. The three sites are ~100–150 km apart, so SMIPS finally varies between
-training sites, and the model uses it.
+- **(a)** Site-level SMIPS distributions differ (Adelong ≈53, Kyeamba ≈38,
+  Yanco ≈26 mm), supplying the between-site signal absent in the single-cluster
+  set.
+- **(b)** Leave-site-out fit across 30 held-out stations: pooled r = 0.54,
+  r² = +0.16.
+- **(c)** Feature importance: SMIPS becomes the highest-ranked predictor (0.34),
+  followed by slope (0.27).
+- **(d)** Residual per-station bias persists (e.g. K12 −16 %, A5 +11 %).
+  Per-station ubRMSE remains low (≈3–4 %), indicating that temporal dynamics are
+  well reproduced and the residual is a level offset.
 
-![Catchment results](figures/catchment_results.png)
-
-- **(a)** SMIPS now spans the sites (Adelong ≈53, Kyeamba ≈38, Yanco ≈26 mm) —
-  the cross-site signal that was missing at Kyeamba alone.
-- **(b)** Leave-site-out fit over 30 held-out stations: **pooled r = 0.54,
-  r² = +0.16** (was −1.16) — genuinely better than predicting the mean.
-- **(c)** Feature importance flips: **SMIPS goes from least-used (0.006) to the
-  single most-used feature (0.34)**, then slope (0.27). The downscaling premise —
-  SMIPS sets the level, terrain refines it — now holds.
-- **(d)** What remains: a per-station **level bias** (e.g. K12 −16%, A5 +11%).
-  Bias-removed error per site is good (ubRMSE ≈ 3–4%), so the model tracks
-  *dynamics* well; the residual offset is local soil/texture that SMIPS + terrain
-  don't capture — a candidate for a soil covariate or per-site effect later.
-
-| metric | Kyeamba-only (4 stn) | catchment (30 stn) |
+| Metric | Kyeamba only (4 stations) | Catchment (30 stations) |
 |---|---|---|
-| pooled leave-site-out `r` | −0.45 | **+0.54** |
-| pooled leave-site-out `r²` | −1.16 | **+0.16** |
-| SMIPS feature importance | 0.006 | **0.34** |
+| Pooled leave-site-out r | −0.45 | +0.54 |
+| Pooled leave-site-out r² | −1.16 | +0.16 |
+| SMIPS feature importance | 0.006 | 0.34 |
 | corr(target, SMIPS) | 0.25 | 0.53 |
 
----
+Between-site variation in SMIPS changes its feature importance from negligible
+to dominant and brings pooled cross-validation skill into the positive range.
 
-## Stage 6 — the 30 m product over Yanco
+## 30 m downscaling and spatial transfer
 
-Applying the model per pixel gives the actual deliverable: a **30 m root-zone
-soil-moisture map**. To keep the test honest, the model here is trained on
-**Kyeamba + Adelong only and Yanco is fully held out** — so the map *and* its
-validation are genuine transfer to a catchment the model never saw (the real
-downscaling use case). Date: **2008-07-31** (all 12 Yanco stations report).
+Stage 6 applies the model per pixel to produce the 30 m field
+([`downscale.py`](modules/downscale.py.md)). To obtain an out-of-sample
+assessment, the model was trained on Kyeamba and Adelong only, with Yanco
+withheld entirely; the resulting field and its validation therefore represent
+transfer to an unobserved catchment. Evaluation date: 2008-07-31 (all 12 Yanco
+stations reporting).
 
-![Downscaled Yanco](figures/downscale_yanco.png)
+![30 m downscaling over Yanco](figures/downscale_yanco.png)
 
-- **(a) → (b)/(c)** The blocky ~1 km SMIPS input is sharpened to a 30 m field;
-  the zoom **(c)** reveals dendritic drainage structure the coarse input cannot
-  resolve. This terrain-driven detail is the entire point of downscaling.
-- **(d)** Held-out validation at the 12 Yanco stations:
+- **(a)–(c)** The ≈1 km SMIPS input is resolved to a 30 m field; the detail view
+  (c) shows drainage-network structure not present in the coarse input.
+- **(d)** Validation at the 12 withheld Yanco stations:
 
-  | metric | value | reading |
+  | Metric | Value | Interpretation |
   |---|---|---|
-  | RMSE | 11.5 % | dominated by bias |
-  | **ubRMSE** | **2.4 %** | bias-removed error is small — the spatial pattern transfers |
-  | bias | **+11.3 %** | model trained on wetter uplands over-predicts the semi-arid Yanco plains |
-  | r | 0.41 | moderate across 12 stations |
+  | RMSE | 11.5 % | Dominated by bias |
+  | ubRMSE | 2.4 % | Bias-removed error is low; spatial pattern transfers |
+  | Bias | +11.3 % | Systematic over-prediction of the semi-arid Yanco plains by a model trained on wetter upland sites |
+  | r | 0.41 | Moderate, across 12 stations |
 
-**Interpretation.** Transferring to an unseen catchment, the *relative* structure
-is captured well (ubRMSE 2.4 %) but the *absolute level* carries a large regional
-bias. This is the same per-station level bias seen in Stage 5, now in its
-starkest form (whole region held out): SMIPS + terrain do not encode the local
-soil/climate baseline that sets absolute moisture. → see **Future work**.
+**Assessment.** Under full-region transfer the relative spatial structure is
+reproduced (ubRMSE 2.4 %) while the absolute level carries a substantial regional
+bias. This is consistent with the residual per-station bias observed in Stage 5:
+SMIPS and terrain do not encode the local soil and climate properties that set
+the absolute moisture level. See [Limitations](#limitations) and
+[Future work](#future-work).
 
-> **Metrics convention used throughout.** `RMSE` total error; `ubRMSE` =
-> √(RMSE²−bias²), the bias-removed error (the standard soil-moisture skill
-> number); `bias` = mean(pred−obs); `r` Pearson; `r²` = 1−SS_res/SS_tot (can go
-> negative when bias dominates). Headline *generalisation* skill is always the
-> **leave-site-out / leave-region-out** value — never an in-sample fit.
+## Metrics
 
----
+| Metric | Definition |
+|---|---|
+| RMSE | Root-mean-square error, √mean((pred − obs)²) |
+| ubRMSE | Bias-removed RMSE, √(RMSE² − bias²); the standard soil-moisture skill statistic |
+| Bias | mean(pred − obs) |
+| r | Pearson correlation |
+| r² | 1 − SS_res / SS_tot (may be negative when bias dominates) |
+
+Generalisation skill is reported as the leave-site-out or leave-region-out
+value in all cases.
+
+## Limitations
+
+- **Absolute level bias on transfer.** The principal residual error is a regional
+  level offset (+11.3 % for Yanco under leave-region-out). Predictors currently
+  encode moisture *dynamics* (low ubRMSE) but not the local *baseline*.
+- **Training-set coverage.** Three catchments constrain between-site
+  generalisation; additional sites would improve the estimate of transfer skill.
+- **Single-date downscaling demonstration.** Stage 6 is evaluated on one date;
+  multi-date and seasonal evaluation remains outstanding (Stage 7).
 
 ## Future work
 
-1. **SLGA soil covariate (highest priority).** The dominant remaining error is an
-   absolute *level* bias on transfer (Stage 6: +11 % over Yanco). Static soil
-   properties — clay/sand fraction, bulk density from the
+1. **Soil covariates (priority).** Static soil properties (clay/sand fraction,
+   bulk density) from the
    [Soil and Landscape Grid of Australia](https://www.clw.csiro.au/aclep/soilandlandscapegrid/)
-   (SLGA, ~90 m) — most plausibly encode the baseline that SMIPS + terrain miss.
-   They would enter as additional static per-pixel features in
-   [`features.py`](modules/features.py.md) / [`downscale.py`](modules/downscale.py.md);
-   no architecture change. *Not implemented yet.*
-2. **Mass conservation.** Constrain the 30 m field to aggregate back to a coarse
-   reference per cell (decompose into cell-mean + terrain anomaly, rebase the
-   mean). Needs a coarse reference in % units — see
-   [`downscale.py` doc](modules/downscale.py.md#documented-future-work-not-yet-implemented).
-3. **Bias correction / mixed effects.** A per-site offset (or quantile mapping to
-   SMIPS climatology) would absorb the regional level bias directly.
+   (SLGA, ≈90 m) are the most direct candidate for encoding the absolute-level
+   baseline. They would be added as static per-pixel features in
+   [`features.py`](modules/features.py.md) and
+   [`downscale.py`](modules/downscale.py.md) with no change to model structure.
+   Not yet implemented.
+2. **Mass conservation.** Constrain the 30 m field to aggregate to a coarse
+   reference within each cell (decomposition into cell mean plus terrain anomaly,
+   with the mean rebased onto the reference). Requires a coarse reference in the
+   target units (%); see the
+   [`downscale.py` note](modules/downscale.py.md#future-work-not-yet-implemented).
+3. **Bias correction.** A per-site offset or quantile mapping to SMIPS
+   climatology would address the regional level bias directly.
 
----
+## Reproducibility
 
-## Reproduce the figures
-
-From the repo root (with the `paddockts` conda env active so `PaddockTS` and the
-training-data caches are available):
-
-```bash
-PYTHONPATH=. python handout/plot_results.py
-```
-
-This loads (or rebuilds) the Kyeamba 2020 Jun–Jul training table, reconstructs
-the pre-fix SMIPS values to show the correction, runs the leave-site-out CV, and
-overwrites the three PNGs in [`figures/`](figures/).
-
-The catchment and Stage 6 figures come from the expanded table
-(`data/train_catchment_2006_2010.csv`):
+Run from the repository root with the `paddockts` conda environment active (so
+that `PaddockTS` and the cached inputs are available):
 
 ```bash
-PYTHONPATH=. python handout/plot_catchment.py    # catchment_results.png
-PYTHONPATH=. python handout/plot_downscale.py    # downscale_yanco.png (30 m map)
+PYTHONPATH=. python handout/plot_results.py     # smips_correction, leave_site_out_cv, per_site_timeseries
+PYTHONPATH=. python handout/plot_catchment.py   # catchment_results
+PYTHONPATH=. python handout/plot_downscale.py   # downscale_yanco (30 m field)
 ```
 
-> The module write-ups in [`modules/`](modules/) summarise each source file; the
-> code of record lives in [`../emt/`](../emt/).
+`plot_results.py` rebuilds the Kyeamba June–July 2020 table, reconstructs the
+pre-correction SMIPS values for comparison, and runs the cross-validation.
+`plot_catchment.py` and `plot_downscale.py` operate on the expanded table
+(`data/train_catchment_2006_2010.csv`).
+
+The module notes under [`modules/`](modules/) summarise each source file; the
+implementation of record is in [`../emt/`](../emt/).
