@@ -33,7 +33,8 @@ varying within each coarse SMIPS cell (see panel (c) of the Stage 6 figure in th
   rebases the cell mean onto a coarse-% reference (e.g. a calibrated SMIPS-to-%
   transfer, or resampled SMAP/ASCAT), preserving the fine structure while removing
   the per-cell offset.
-- **Soil covariates.** The principal residual error is an absolute-level bias on
-  transfer to a new catchment; static soil properties (e.g. SLGA texture/clay)
-  are the most direct candidate and would be added as static per-pixel features
-  here. See the [README](../README.md#future-work).
+- **Soil covariates (tested, did not help).** SLGA soil properties were added
+  here and at the station level to address the absolute-level bias, but degraded
+  leave-site-out skill; see the
+  [soil covariate experiment](../README.md#soil-covariate-experiment-negative-result).
+  The per-pixel hook was reverted.

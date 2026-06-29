@@ -26,6 +26,10 @@ from emt.covariates import TERRAIN_VARS
 from emt.features import SMIPS_COL
 
 TARGET = "sm_rootzone_pct"
+# SLGA soil covariates were tested as features and reverted: they act as a
+# near-unique per-station identifier and degraded leave-site-out skill
+# (pooled NSE +0.15 -> +0.03). The loader emt/slga.py is retained for a future
+# larger-network attempt. See the handout.
 FEATURES = [SMIPS_COL, *TERRAIN_VARS, "doy_sin", "doy_cos"]
 
 

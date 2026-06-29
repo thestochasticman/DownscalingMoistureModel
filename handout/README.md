@@ -247,13 +247,16 @@ predictions toward the central tendency.
 - **(b)** Predicted station means span a narrower range than observed (22 % vs
   27 %), flatter than the 1:1 line.
 
-Two effects contribute, with different remedies. The dominant one is *limited
-identifiability*: SMIPS and terrain explain only ~40 % of the between-station
-level differences, so the unexplained baseline collapses to the mean. A
-distinguishing covariate (soil) is the root fix. A minor secondary effect is
+Two effects contribute. The dominant one is *limited identifiability*: SMIPS and
+terrain explain only ~40 % of the between-station level differences, so the
+unexplained baseline collapses to the mean. A minor secondary effect is
 *sampling imbalance* (bias correlates weakly with record length, r = −0.22),
-addressable by sample weighting. Both are listed under
-[Future work](#future-work).
+addressable by sample weighting.
+
+A natural hypothesis was that the missing baseline is soil, and that an SLGA soil
+covariate would supply it. This was tested and **did not hold**; see
+[Soil covariate experiment](#soil-covariate-experiment-negative-result). The
+remaining levers are listed under [Future work](#future-work).
 
 ## 30 m downscaling and spatial transfer
 
@@ -321,49 +324,79 @@ the skill is limited by absolute-level bias.
   +11.3 % bias. The model should not be applied to a new, climatically different
   region without bias correction.
 
-The limiting factor throughout is absolute-level bias, not dynamics. Reducing it
-(soil covariates and/or bias correction; see [Future work](#future-work)) is the
-prerequisite for positive per-station NSE. When evaluating a new dataset, weight
-the per-station NSE over the full record, not a single-date spatial snapshot (for
+The limiting factor throughout is absolute-level bias, not dynamics. An SLGA soil
+covariate was tested as the obvious remedy but did not help
+([Soil covariate experiment](#soil-covariate-experiment-negative-result)); the
+remaining levers are more training sites and bias correction (see
+[Future work](#future-work)). When evaluating a new dataset, weight the
+per-station NSE over the full record, not a single-date spatial snapshot (for
 which NSE is unstable when the between-station spread is small).
+
+## Soil covariate experiment (negative result)
+
+The per-station bias was hypothesised to be missing soil information: stations
+with similar SMIPS and terrain but different true baselines should be separable
+by soil texture and water-holding capacity. SLGA v2 soil covariates
+([`slga.py`](modules/slga.py.md): clay, sand, available water capacity, bulk
+density, depth-averaged 0–100 cm) were added and evaluated by leave-site-out
+cross-validation on the same table.
+
+| Configuration | pooled NSE | r | per-station NSE > 0 |
+|---|---|---|---|
+| **No soil (baseline)** | **+0.15** | **0.53** | 7/30 |
+| All 4 soil, point-sampled | +0.03 | 0.47 | 12/30 |
+| AWC only, point-sampled | +0.12 | 0.51 | 7/30 |
+| AWC only, ~1 km mean | +0.12 | 0.51 | 9/30 |
+| All 4 soil, ~1 km mean | −0.27 | 0.28 | 15/30 |
+
+**Soil did not improve generalisation; no configuration beat the no-soil
+baseline.** The full soil set made `soil_sand` the second most important feature,
+but it functions as a near-unique per-station identifier, the same leakage that
+`lat`/`lon` are excluded to avoid, so it fits the training stations and
+mis-calibrates held-out ones. The pattern is clearest in the last row: the ~1 km
+soil set produced the *best* per-station NSE (15/30 positive) yet the *worst*
+pooled skill (−0.27), i.e. it fitted each station locally while scrambling the
+cross-site ranking that a spatial product requires.
+
+The conclusion is that the residual bias is not a missing soil feature but
+**too few training sites** for any site-level covariate to generalise. The loader
+([`slga.py`](modules/slga.py.md)) is retained for a future attempt with a denser
+station network; soil is not in the current model.
 
 ## Limitations
 
 - **Absolute level bias on transfer.** The principal residual error is a regional
   level offset (+11.3 % for Yanco under leave-region-out). Predictors currently
-  encode moisture *dynamics* (low ubRMSE) but not the local *baseline*.
-- **Training-set coverage.** Three catchments constrain between-site
-  generalisation; additional sites would improve the estimate of transfer skill.
+  encode moisture *dynamics* (low ubRMSE) but not the local *baseline*, and a
+  soil covariate did not supply it (above).
+- **Training-set coverage.** Thirty stations across three catchments are too few
+  for a site-level covariate to generalise; this is the principal limit on
+  between-site skill. More sites are the main lever.
 - **Single-date downscaling demonstration.** Stage 6 is evaluated on one date;
   multi-date and seasonal evaluation remains outstanding (Stage 7).
 
 ## Future work
 
-1. **Soil covariates (priority).** Static soil properties (clay/sand fraction,
-   bulk density) from the
-   [Soil and Landscape Grid of Australia](https://www.clw.csiro.au/aclep/soilandlandscapegrid/)
-   (SLGA, ≈90 m) are the most direct candidate for encoding the absolute-level
-   baseline. They would be added as static per-pixel features in
-   [`features.py`](modules/features.py.md) and
-   [`downscale.py`](modules/downscale.py.md) with no change to model structure.
-   Not yet implemented.
-2. **Mass conservation.** Constrain the 30 m field to aggregate to a coarse
-   reference within each cell (decomposition into cell mean plus terrain anomaly,
-   with the mean rebased onto the reference). Requires a coarse reference in the
-   target units (%); see the
-   [`downscale.py` note](modules/downscale.py.md#future-work-not-yet-implemented).
-3. **Bias correction.** A per-site offset or quantile mapping to SMIPS
+1. **More training sites (priority).** The soil experiment indicates the binding
+   constraint is too few sites for a site-level covariate to generalise. Adding
+   stations (e.g. the scattered regional Murrumbidgee M-sites, or other networks)
+   should both improve transfer skill directly and give soil covariates enough
+   support to be re-tested.
+2. **Bias correction.** A per-site offset or quantile mapping to SMIPS
    climatology would address the regional level bias directly.
-4. **Reduce prediction shrinkage.** The per-station bias is partly shrinkage
+3. **Reduce prediction shrinkage.** The per-station bias is partly shrinkage
    toward the training mean (slope −0.61; see Per-station performance). Two
    complementary measures: (i) **sample weighting** so stations and sites
    contribute equally regardless of record length, addressing the minor
    sampling-imbalance component (bias–record-length r = −0.22); (ii) a
    **less shrinkage-prone estimator** (gradient boosting, or a model with an
    explicit linear SMIPS term), since Random-Forest leaf averaging cannot
-   extrapolate. These mitigate the symptom; the soil covariate (item 1) is the
-   root fix, since the dominant cause is limited identifiability rather than
-   imbalance.
+   extrapolate.
+4. **Mass conservation.** Constrain the 30 m field to aggregate to a coarse
+   reference within each cell (decomposition into cell mean plus terrain anomaly,
+   with the mean rebased onto the reference). Requires a coarse reference in the
+   target units (%); see the
+   [`downscale.py` note](modules/downscale.py.md#future-work-not-yet-implemented).
 
 ## Reproducibility
 
