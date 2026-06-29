@@ -51,7 +51,7 @@ for patch, s in zip(bp["boxes"], SITES):
 for s, d in zip(SITES, data):
     ax[0,0].text(SITES.index(s)+1, np.median(d)+1, f"μ={d.mean():.0f}", ha="center", fontsize=9)
 ax[0,0].set(ylabel="SMIPS TotalBucket (mm)",
-            title="(a) SMIPS varies across sites now (the missing signal)")
+            title="(a) SMIPS distribution by site")
 ax[0,0].grid(alpha=.3, axis="y")
 
 # (b) leave-site-out predicted vs observed
@@ -74,7 +74,7 @@ ax[1,0].barh(y+h/2, [imp[f] for f in order], h, color="#55a868", label="catchmen
 ax[1,0].barh(y-h/2, [KYEAMBA_IMP.get(f,0) for f in order], h, color="#bbbbbb", label="Kyeamba-only (4 stn)")
 ax[1,0].set_yticks(y); ax[1,0].set_yticklabels(order); ax[1,0].invert_yaxis()
 ax[1,0].set(xlabel="importance",
-            title="(c) SMIPS goes from least- to most-used feature")
+            title="(c) Feature importance: catchment vs single-cluster")
 ax[1,0].legend(fontsize=9); ax[1,0].grid(alpha=.3, axis="x")
 
 # (d) per-station bias (remaining limitation)
@@ -84,7 +84,7 @@ ax[1,1].bar(range(len(ps)), ps["bias"], color=colors)
 ax[1,1].axhline(0, color="k", lw=.8)
 ax[1,1].set_xticks(range(len(ps))); ax[1,1].set_xticklabels(ps["station"], rotation=90, fontsize=7)
 ax[1,1].set(ylabel="per-station bias (pred−obs, %)",
-            title="(d) Residual per-station level bias (local soil, not in SMIPS+terrain)")
+            title="(d) Residual per-station bias")
 ax[1,1].grid(alpha=.3, axis="y")
 handles = [plt.Rectangle((0,0),1,1,color=SITE_COLOR[s]) for s in SITES]
 ax[1,1].legend(handles, SITES, fontsize=8)

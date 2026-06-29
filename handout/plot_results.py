@@ -90,7 +90,7 @@ def fig_data(new, old):
     ax[0].plot(lim, lim, "k--", lw=1, label="1:1 (no change)")
     ax[0].set(xlim=lim, ylim=lim, xlabel="SMIPS old (resampled, mm)",
               ylabel="SMIPS new (native grid, mm)",
-              title="(a) SMIPS correction from native-grid snapping")
+              title="(a) SMIPS before vs after native-grid alignment")
     ax[0].legend(fontsize=8); ax[0].grid(alpha=.3)
 
     shift = df.groupby("station").apply(
@@ -130,7 +130,7 @@ def fig_model(new, cv, per_site, imp):
     lim = [pred[[TARGET, "pred"]].min().min()-1, pred[[TARGET, "pred"]].max().max()+1]
     ax[0].plot(lim, lim, "k--", lw=1)
     ax[0].set(xlim=lim, ylim=lim, xlabel="observed root-zone (%)", ylabel="LOSO predicted (%)",
-              title="(a) Leave-site-out: each site tight but OFF the 1:1 line")
+              title="(a) Leave-site-out: predicted vs observed by station")
     ax[0].legend(fontsize=8, loc="upper left"); ax[0].grid(alpha=.3)
 
     x = np.arange(len(STATIONS)); w = 0.38
@@ -138,12 +138,12 @@ def fig_model(new, cv, per_site, imp):
     ax[1].bar(x+w/2, [per_site.loc[s, "bias"] for s in STATIONS], w, label="bias (pred−obs)", color="#c44e52")
     ax[1].axhline(0, color="k", lw=.8)
     ax[1].set_xticks(x); ax[1].set_xticklabels(STATIONS)
-    ax[1].set(title="(b) High within-site r, large bias → poor pooled skill", ylabel="value")
+    ax[1].set(title="(b) Per-station correlation and bias", ylabel="value")
     ax[1].legend(fontsize=8); ax[1].grid(alpha=.3, axis="y")
 
     imp_s = imp.sort_values()
     ax[2].barh(imp_s.index, imp_s.values, color="#55a868")
-    ax[2].set(title="(c) RF feature importance (SMIPS barely used)", xlabel="importance")
+    ax[2].set(title="(c) Random Forest feature importance", xlabel="importance")
     ax[2].grid(alpha=.3, axis="x")
 
     fig.tight_layout()
@@ -170,8 +170,8 @@ def fig_timeseries(new, cv, per_site):
         axx.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
         if stn == "K6":
             axx.legend(fontsize=8, loc="upper left")
-    fig.suptitle("Leave-site-out prediction vs observed (right axis: SMIPS) — "
-                 "shape tracks, level is offset", y=1.0)
+    fig.suptitle("Leave-site-out prediction vs observed by station "
+                 "(right axis: SMIPS)", y=1.0)
     fig.tight_layout()
     fig.savefig(FIG_DIR / "per_site_timeseries.png", dpi=130)
     plt.close(fig)

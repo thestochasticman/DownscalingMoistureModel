@@ -68,7 +68,7 @@ fig, ax = plt.subplots(2, 2, figsize=(15, 12))
 
 # (a) coarse SMIPS input (mm), blocky ~1 km
 im0 = ax[0,0].imshow(ds["smips_native"].values, extent=ext, origin="upper", cmap="YlGnBu")
-ax[0,0].set_title("(a) Coarse SMIPS input — ~1 km (mm)")
+ax[0,0].set_title("(a) Coarse SMIPS input (~1 km, mm)")
 fig.colorbar(im0, ax=ax[0,0], shrink=.8, label="SMIPS TotalBucket (mm)")
 
 # (b) 30 m downscaled product (%), with held-out stations coloured by observation
@@ -76,7 +76,7 @@ im1 = ax[0,1].imshow(ds["sm_pred"].values, extent=ext, origin="upper",
                      cmap="YlGnBu", vmin=vmin, vmax=vmax)
 ax[0,1].scatter(sx, sy, c=obs[TARGET], cmap="YlGnBu", vmin=vmin, vmax=vmax,
                 s=90, edgecolor="red", linewidth=1.5, zorder=3)
-ax[0,1].set_title("(b) Downscaled 30 m product (%) — dots = held-out OzNet obs")
+ax[0,1].set_title("(b) Downscaled 30 m product (%); dots = held-out OzNet stations")
 fig.colorbar(im1, ax=ax[0,1], shrink=.8, label="root-zone SM (%)")
 
 # (c) the terrain detail the downscaling adds (zoom on the field)
@@ -85,7 +85,7 @@ sub = ds["sm_pred"].values[zy:zy+ny//3, zx:zx+nx//3]
 sub_ext = [float(ds.x[zx]), float(ds.x[zx+nx//3-1]),
            float(ds.y[zy+ny//3-1]), float(ds.y[zy])]
 im2 = ax[1,0].imshow(sub, extent=sub_ext, origin="upper", cmap="YlGnBu")
-ax[1,0].set_title("(c) Zoom: terrain-driven 30 m structure (absent in SMIPS)")
+ax[1,0].set_title("(c) Detail: 30 m terrain structure")
 fig.colorbar(im2, ax=ax[1,0], shrink=.8, label="root-zone SM (%)")
 
 # (d) validation scatter
@@ -97,15 +97,15 @@ lim = [min(obs[TARGET].min(), obs["pred"].min())-2,
        max(obs[TARGET].max(), obs["pred"].max())+2]
 ax[1,1].plot(lim, lim, "k--", lw=1)
 ax[1,1].set(xlim=lim, ylim=lim, xlabel="OzNet observed (%)", ylabel="downscaled @ station (%)",
-            title="(d) Held-out validation @ 12 Yanco stations")
+            title="(d) Held-out validation at 12 Yanco stations")
 ax[1,1].text(.03, .97, f"RMSE={M['rmse']:.2f}%\nubRMSE={M['ubrmse']:.2f}%\n"
              f"bias={M['bias']:+.2f}%\nr={M['r']:.2f}  n={M['n']}",
              transform=ax[1,1].transAxes, va="top", fontsize=10,
              bbox=dict(boxstyle="round", fc="w", alpha=.8))
 ax[1,1].grid(alpha=.3)
 
-fig.suptitle(f"Stage 6 — SMIPS → 30 m over Yanco, {DAY} "
-             f"(model trained on Kyeamba+Adelong, Yanco held out)", y=1.0, fontsize=13)
+fig.suptitle(f"Stage 6: SMIPS to 30 m over Yanco, {DAY} "
+             f"(trained on Kyeamba and Adelong; Yanco held out)", y=1.0, fontsize=13)
 fig.tight_layout()
 fig.savefig(FIG, dpi=130)
 stamp(f"wrote {FIG.relative_to(REPO)}")

@@ -40,60 +40,88 @@ fit.
 
 ## Data quality: SMIPS WCS grid resampling
 
-The TERN GeoServer Web Coverage Service resamples each `GetCoverage` response to
-fit an integer pixel count within the requested bounding box. Consequently the
-grid origin and cell size of the returned raster depend on the request extent,
-and a fixed geographic point can fall in different ≈1 km cells depending on the
-window requested. For station K6 the sampled value was 43.7, 49.6, or 61.6 mm
-across three request windows for the same location and date (a ≈40 % range).
+SMIPS is published on a fixed *native grid*: ≈1 km cells at fixed geographic
+positions (origin 112.90499°E, −43.73500°N; cell size 0.0099976°, from the WCS
+`DescribeCoverage`). The TERN GeoServer Web Coverage Service does not return that
+grid directly; it fits an integer number of pixels into whatever bounding box is
+requested, so the returned cell size and origin shift with the request. A fixed
+point can therefore fall in different ≈1 km cells depending on the window: for
+station K6 the sampled value was 43.7, 49.6, or 61.6 mm across three windows for
+the same location and date (a ≈40 % range).
 
-The resolution (`snap_bbox` in [`smips.py`](modules/smips.py.md)) aligns every
-request to the native SMIPS grid, taken from the WCS `DescribeCoverage`
-(origin 112.90499°E, −43.73500°N; cell size 0.0099976°). With an aligned
-envelope the server's integer-pixel fit coincides with the native grid, making
-the sampled value independent of the request window. (The `scaleFactor=1`
-parameter was tested and confirmed to have no effect.)
+The fix (`snap_bbox` in [`smips.py`](modules/smips.py.md)) rounds each request
+out to the native grid lines, so the server's integer-pixel fit reproduces the
+native grid and sampling becomes independent of the request window. (The
+`scaleFactor=1` parameter was tested and has no effect.)
+
+The mechanism and its resolution are shown below for station K6 on one day, using
+three request windows of different sizes centred on the station.
+
+![SMIPS WCS grid alignment](figures/grid_alignment.png)
+
+Top row (without alignment): the service returns a different pixel grid for each
+request window, so the cell boundaries shift between panels and the station (red
+star) falls in a different ≈1 km cell each time, yielding 43.7, 49.6, and 61.6 mm
+for the same location and date. Bottom row (with `snap_bbox`): each request is
+aligned to the native grid, the returned cells coincide across all three windows,
+and the station returns 61.6 mm in every case. This figure is reproduced from
+live SMIPS by [`plot_grid_alignment.py`](plot_grid_alignment.py). The next figure
+shows the effect of this correction on the training data.
 
 ![SMIPS sampling correction](figures/smips_correction.png)
 
-- **(a)** Pre- and post-correction SMIPS values. Three of the four stations were
-  unaffected (their original windows already resolved to the correct cell);
-  station K6 changed.
-- **(b)** Mean per-station change: K6 +15.4 mm, others ≈0.
-- **(c)** Corrected SMIPS against the target. The four Kyeamba stations occupy
-  near-horizontal bands: SMIPS varies within a site but provides limited
-  separation between site-mean moisture levels. This is relevant to the result
-  in the next section.
+In this figure and those that follow, each colour denotes one of the four
+Kyeamba stations (K6, K7, K10, K12) and a point is one station-day.
+
+- **(a)** SMIPS values before (x) versus after (y) the correction; the dashed
+  line marks no change. Three stations lie on the line (their original request
+  windows already resolved to the correct cell); K6 lies above it, indicating its
+  values changed.
+- **(b)** Mean per-station change: K6 +15.4 mm, the others ≈0. The resampling
+  issue materially affected one of the four stations.
+- **(c)** Corrected SMIPS (x) against the observed target (y). The four stations
+  occupy near-horizontal bands (K12 ≈33 %, the others ≈29 %): SMIPS varies within
+  a station but provides little separation between the stations' mean moisture
+  levels. The weak pooled correlation (r = 0.25) reflects this and is relevant to
+  the next section.
 
 Cached SMIPS extracted before this correction used window-dependent values; the
 training table and model were rebuilt after clearing the cache.
 
 ## Initial evaluation: single-cluster training set
 
-The model was first evaluated on four Kyeamba stations (June–July 2020).
-Leave-site-out cross-validation yielded negative pooled skill
-(r = −0.45, r² = −1.16), and SMIPS received negligible feature importance
-(0.006).
+The model was first evaluated on four Kyeamba stations (June–July 2020) using
+**leave-site-out cross-validation**: the model is trained on three stations and
+evaluated on the fourth, which it has not seen, with the procedure repeated for
+each station in turn. This estimates performance at a new location, which is the
+intended application. The result was negative pooled skill (r = −0.45,
+r² = −1.16), with negligible SMIPS feature importance (0.006). The figures below
+explain why.
 
 ![Leave-site-out cross-validation, Kyeamba](figures/leave_site_out_cv.png)
 
-- **(a)** Predicted versus observed for each held-out station. Per-station
-  correlation is high (each cluster aligns along the diagonal) but offset from
-  the 1:1 line.
-- **(b)** Per-station correlation is ≈0.9 throughout, while per-station bias is
-  large (K10 +3.5, K12 −4.6). High correlation combined with large bias produces
-  the negative pooled r².
-- **(c)** Feature importance is dominated by terrain (≈88 %); SMIPS contributes
-  ≈0.006.
+- **(a)** Predicted (y) versus observed (x) for each held-out station; the dashed
+  line marks perfect prediction. Each station forms a tight cluster (the
+  day-to-day variation is reproduced) but the clusters sit off the line. K12
+  (observed ≈33 %, predicted ≈28 %) is the clearest case: the temporal pattern is
+  correct but the absolute level is not.
+- **(b)** Per station, the correlation (blue) is ≈0.9 throughout while the bias
+  (red) is large (K10 +3.5, K12 −4.6). High correlation combined with large bias
+  produces the negative pooled r².
+- **(c)** Feature importance is dominated by terrain (≈88 %); `smips_totalbucket`
+  is near the bottom (≈0.006). For a method intended to downscale SMIPS, this
+  indicates SMIPS is not contributing.
 
 ![Per-site time series, Kyeamba](figures/per_site_timeseries.png)
 
-The per-station time series show that temporal dynamics are reproduced while the
-absolute level is offset.
+The per-station time series (black: observed; colour: held-out prediction; grey
+dashed: SMIPS on the right axis) show the same outcome: the prediction follows
+the shape of the observations but sits at an offset level.
 
-**Assessment.** The four stations lie within approximately one SMIPS cell, so
-the coarse predictor carries no between-station signal. The model reproduces
-temporal dynamics but cannot determine the absolute level of a held-out station.
+**Assessment.** The four stations lie within approximately one SMIPS cell, so the
+coarse predictor takes nearly the same value at all four and carries no
+between-station signal. With no basis for distinguishing the stations, the model
+relies on terrain and cannot determine the absolute level of a held-out station.
 This is a limitation of training-set spatial coverage rather than of the
 pipeline, and motivates expansion to multiple catchments.
 
@@ -204,9 +232,10 @@ Run from the repository root with the `paddockts` conda environment active (so
 that `PaddockTS` and the cached inputs are available):
 
 ```bash
-PYTHONPATH=. python handout/plot_results.py     # smips_correction, leave_site_out_cv, per_site_timeseries
-PYTHONPATH=. python handout/plot_catchment.py   # catchment_results
-PYTHONPATH=. python handout/plot_downscale.py   # downscale_yanco (30 m field)
+PYTHONPATH=. python handout/plot_grid_alignment.py  # grid_alignment
+PYTHONPATH=. python handout/plot_results.py         # smips_correction, leave_site_out_cv, per_site_timeseries
+PYTHONPATH=. python handout/plot_catchment.py       # catchment_results
+PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field)
 ```
 
 `plot_results.py` rebuilds the Kyeamba June–July 2020 table, reconstructs the
