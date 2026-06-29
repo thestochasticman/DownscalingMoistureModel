@@ -17,7 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-from emt.model import leave_site_out_cv, TARGET
+from emt.model1.model import leave_site_out_cv, TARGET
 from emt.features import SMIPS_COL  # noqa: F401
 
 REPO = Path(__file__).resolve().parent.parent

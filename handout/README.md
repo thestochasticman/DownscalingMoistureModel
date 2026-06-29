@@ -23,7 +23,7 @@ corresponding note under [`modules/`](modules/); all figures are reproducible
 | 3a. Coarse predictor | [`smips.py`](modules/smips.py.md) | SMIPS `TotalBucket` field (mm), the quantity being downscaled |
 | 3b. Fine predictors | [`covariates.py`](modules/covariates.py.md) | 30 m terrain covariates (elevation, slope, northness/eastness, TWI, HLI, flow accumulation) |
 | 4. Feature assembly | [`features.py`](modules/features.py.md) | Training table: one record per station-day (target, SMIPS, terrain, seasonality) |
-| 5. Model | [`model.py`](modules/model.py.md) | Random Forest regressor with leave-site-out cross-validation |
+| 5. Model | [`model1`](modules/model1.md) · [`model2`](modules/model2.md) | Random Forest (baseline) and a linear comparison; shared scoring in `evaluation.py` |
 | 6. Downscaling | [`downscale.py`](modules/downscale.py.md) | Per-pixel application of the model to produce a 30 m field |
 
 ## The model
@@ -68,7 +68,9 @@ cross-validation. The same fitted model is used two ways: evaluated by
 leave-site-out cross-validation, and applied to every 30 m pixel of an area to
 produce the downscaled field. Reported skill is always the held-out estimate,
 never an in-sample fit. Configuration (`build_estimator`): 300 trees, minimum 3
-samples per leaf; see [`model.py`](modules/model.py.md).
+samples per leaf; see [`model1`](modules/model1.md). An alternative linear model
+([`model2`](modules/model2.md)) is compared in
+[Model comparison](#model-comparison).
 
 ```mermaid
 flowchart TD
@@ -363,12 +365,32 @@ The conclusion is that the residual bias is not a missing soil feature but
 ([`slga.py`](modules/slga.py.md)) is retained for a future attempt with a denser
 station network; soil is not in the current model.
 
+## Model comparison
+
+The estimator is isolated in per-model packages ([`emt/model1`](modules/model1.md),
+[`emt/model2`](modules/model2.md)) that share the data, features, and scoring
+harness ([`emt/evaluation.py`](../emt/evaluation.py)), so approaches are compared
+directly. Results to date:
+
+| Model | Estimator | pooled NSE | r | per-station NSE > 0 | shrinkage slope |
+|---|---|---|---|---|---|
+| [model1](modules/model1.md) | Random Forest | **+0.15** | **0.53** | 7/30 | −0.61 |
+| [model2](modules/model2.md) | Linear (Ridge, scaled) | +0.02 | 0.36 | 12/30 | −0.98 |
+
+`model2` was built to test whether an extrapolating (non-averaging) estimator
+reduces the shrinkage that Random-Forest leaf-averaging causes. It did not: the
+linear model has worse cross-site skill and a *steeper* shrinkage slope (−0.98).
+A single global hyperplane extracts less of the limited between-site signal than
+the Random Forest's nonlinear splits. As with the soil experiment, this points to
+**too few sites (not the estimator) as the binding constraint**. `model1` (RF)
+remains the production model.
+
 ## Limitations
 
 - **Absolute level bias on transfer.** The principal residual error is a regional
   level offset (+11.3 % for Yanco under leave-region-out). Predictors currently
-  encode moisture *dynamics* (low ubRMSE) but not the local *baseline*, and a
-  soil covariate did not supply it (above).
+  encode moisture *dynamics* (low ubRMSE) but not the local *baseline*, and
+  neither a soil covariate nor a linear estimator supplied it (above).
 - **Training-set coverage.** Thirty stations across three catchments are too few
   for a site-level covariate to generalise; this is the principal limit on
   between-site skill. More sites are the main lever.
@@ -385,13 +407,12 @@ station network; soil is not in the current model.
 2. **Bias correction.** A per-site offset or quantile mapping to SMIPS
    climatology would address the regional level bias directly.
 3. **Reduce prediction shrinkage.** The per-station bias is partly shrinkage
-   toward the training mean (slope −0.61; see Per-station performance). Two
-   complementary measures: (i) **sample weighting** so stations and sites
-   contribute equally regardless of record length, addressing the minor
-   sampling-imbalance component (bias–record-length r = −0.22); (ii) a
-   **less shrinkage-prone estimator** (gradient boosting, or a model with an
-   explicit linear SMIPS term), since Random-Forest leaf averaging cannot
-   extrapolate.
+   toward the training mean (slope −0.61; see Per-station performance).
+   **Sample weighting** so stations and sites contribute equally regardless of
+   record length would address the minor sampling-imbalance component
+   (bias–record-length r = −0.22). A linear estimator was already tried as a
+   less-averaging alternative and did worse ([Model comparison](#model-comparison));
+   **gradient boosting** remains an untested middle ground.
 4. **Mass conservation.** Constrain the 30 m field to aggregate to a coarse
    reference within each cell (decomposition into cell mean plus terrain anomaly,
    with the mean rebased onto the reference). Requires a coarse reference in the

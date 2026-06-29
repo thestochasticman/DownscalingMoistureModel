@@ -40,4 +40,4 @@ maximum absolute difference 0.000 mm).
 ## Output
 
 Long-format table, one record per station-day, consumed by
-[`model.py`](model.py.md).
+[`model1`](model1.md).

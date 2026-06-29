@@ -24,7 +24,7 @@ from PaddockTS.query import Query
 
 from emt.smips import smips_day
 from emt.covariates import terrain_covariates, TERRAIN_VARS
-from emt.model import FEATURES, SMIPS_COL
+from emt.features import SMIPS_COL
 
 
 def _doy_features(day: date) -> tuple[float, float]:
@@ -32,9 +32,12 @@ def _doy_features(day: date) -> tuple[float, float]:
     return float(np.sin(2 * np.pi * doy / 365.25)), float(np.cos(2 * np.pi * doy / 365.25))
 
 
-def downscale(model, query: Query, day: date | str,
+def downscale(model, query: Query, day: date | str, features: list[str],
               smips_var: str = "totalbucket") -> xr.Dataset:
     """Downscale SMIPS to the 30 m terrain grid for one ``day`` over ``query``.
+
+    Model-agnostic: ``model`` is any fitted estimator and ``features`` is its
+    feature list (e.g. ``emt.model1.model.FEATURES``).
 
     Returns a Dataset on the terrain UTM grid with:
       ``sm_pred``       -- 30 m predicted root-zone soil moisture (%),
@@ -59,14 +62,14 @@ def downscale(model, query: Query, day: date | str,
         "doy_cos": np.full(grid.shape, doy_cos),
     }
     # Flatten in the model's exact feature order; predict only finite pixels.
-    cols = [layers[f].ravel() for f in FEATURES]
+    cols = [layers[f].ravel() for f in features]
     X = np.column_stack(cols)
     valid = np.isfinite(X).all(axis=1)
 
     pred = np.full(X.shape[0], np.nan, dtype="float32")
     if valid.any():
         # Predict with a named frame so feature order matches the fitted model.
-        pred[valid] = model.predict(pd.DataFrame(X[valid], columns=FEATURES)).astype("float32")
+        pred[valid] = model.predict(pd.DataFrame(X[valid], columns=features)).astype("float32")
     pred = pred.reshape(grid.shape)
 
     ds = xr.Dataset(

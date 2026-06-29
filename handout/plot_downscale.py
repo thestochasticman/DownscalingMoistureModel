@@ -21,7 +21,7 @@ from pyproj import Transformer
 from emt.queries import query_for_focus_area
 from emt.downscale import downscale
 from emt.covariates import sample_points
-from emt.model import build_estimator, metrics, FEATURES, TARGET
+from emt.model1.model import build_estimator, metrics, FEATURES, TARGET
 from emt.features import SMIPS_COL
 
 REPO = Path(__file__).resolve().parent.parent
@@ -42,7 +42,7 @@ stamp(f"trained on {train.site.unique().tolist()} "
 # --- downscale Yanco for the day ---
 q = query_for_focus_area("yanco", DAY, DAY)
 stamp(f"downscaling Yanco AOI {q.bbox} for {DAY} ...")
-ds = downscale(model, q, DAY)
+ds = downscale(model, q, DAY, FEATURES)
 ny, nx = ds["sm_pred"].shape
 stamp(f"30 m grid: {ny} x {nx} = {ny*nx/1e6:.1f}M pixels")
 

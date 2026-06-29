@@ -18,7 +18,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from emt.model import leave_site_out_cv, TARGET
+from emt.model1.model import leave_site_out_cv, TARGET
 
 REPO = Path(__file__).resolve().parent.parent
 FIG = REPO / "handout" / "figures" / "shrinkage_diagnostic.png"

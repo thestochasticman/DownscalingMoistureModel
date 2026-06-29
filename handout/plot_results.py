@@ -29,7 +29,7 @@ import matplotlib.dates as mdates
 
 import emt.smips as smips
 from emt.features import build_training_table, SMIPS_COL
-from emt.model import leave_site_out_cv, fit, feature_importance, TARGET
+from emt.model1.model import leave_site_out_cv, fit, feature_importance, TARGET
 from emt.insitu.oznet import fetch_manifest, load_daily_rootzone
 from emt.insitu.coordinates import COORDS_CACHE
 

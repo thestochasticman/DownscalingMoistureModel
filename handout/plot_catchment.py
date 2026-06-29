@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from emt.features import SMIPS_COL
-from emt.model import leave_site_out_cv, fit, feature_importance, TARGET, FEATURES
+from emt.model1.model import leave_site_out_cv, fit, feature_importance, TARGET, FEATURES
 
 REPO = Path(__file__).resolve().parent.parent
 FIG = REPO / "handout" / "figures" / "catchment_results.png"
