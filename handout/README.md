@@ -26,17 +26,72 @@ corresponding note under [`modules/`](modules/); all figures are reproducible
 | 5. Model | [`model.py`](modules/model.py.md) | Random Forest regressor with leave-site-out cross-validation |
 | 6. Downscaling | [`downscale.py`](modules/downscale.py.md) | Per-pixel application of the model to produce a 30 m field |
 
-## Model specification
+## The model
+
+The downscaling model is a **Random Forest regressor**: an ensemble of decision
+trees, each fit to a bootstrap sample of the training rows, whose predictions are
+averaged. It learns a nonlinear relationship between the coarse SMIPS value and
+the fine terrain covariates without a prescribed functional form, and it yields
+feature importances. One structural property is relevant to the results: because
+each tree's prediction is an average of training samples, the model cannot
+extrapolate beyond the training range and tends to shrink predictions toward the
+mean (quantified in [Per-station performance](#per-station-performance)).
+
+- **Target (`y`):** OzNet root-zone soil moisture (%).
+- **Features (`X`):** the coarse `smips_totalbucket` (mm); seven 30 m terrain
+  covariates (elevation, slope, northness, eastness, TWI, HLI, flow
+  accumulation); and two seasonality terms (`doy_sin`, `doy_cos`).
 
 ```
 sm_rootzone_pct  ~  smips_totalbucket + terrain(...) + doy_sin + doy_cos
 ```
 
-Station coordinates (`lat`/`lon`) are excluded from the feature set to prevent
-the model from encoding station identity; `station` is retained solely as the
-grouping variable for spatial cross-validation. Reported generalisation skill is
-always the leave-site-out (or leave-region-out) estimate, never an in-sample
-fit.
+A sample of the training table (one row per station-day; selected feature columns,
+with the target in the last column. Northness, eastness and flow accumulation are
+omitted here for width):
+
+| station | date | smips (mm) | elev (m) | slope | twi | hli | doy_sin | doy_cos | target (%) |
+|---|---|---|---|---|---|---|---|---|---|
+| A1 | 2008-08-12 | 100.2 | 828 | 8.74 | 3.48 | 0.99 | −0.67 | −0.75 | **41.7** |
+| A5 | 2008-03-23 | 35.2 | 377 | 0.21 | 9.80 | 0.84 | 0.99 | 0.14 | **20.3** |
+| K12 | 2008-09-01 | 51.0 | 217 | 0.22 | 7.52 | 0.84 | −0.88 | −0.48 | **46.0** |
+| K11 | 2008-12-11 | 1.9 | 322 | 7.13 | 4.02 | 0.84 | −0.33 | 0.95 | **8.5** |
+| Y13 | 2008-01-20 | 95.7 | 123 | 0.48 | 4.78 | 0.85 | 0.34 | 0.94 | **40.0** |
+| Y3 | 2008-03-22 | 15.0 | 145 | 2.37 | 6.95 | 0.89 | 0.99 | 0.16 | **8.7** |
+
+These rows show the relationship the model exploits (wetter SMIPS generally pairs
+with a higher target) and the spread it must resolve within it.
+
+Station coordinates (`lat`/`lon`) are excluded so the model cannot encode station
+identity; `station` is retained only as the grouping variable for spatial
+cross-validation. The same fitted model is used two ways: evaluated by
+leave-site-out cross-validation, and applied to every 30 m pixel of an area to
+produce the downscaled field. Reported skill is always the held-out estimate,
+never an in-sample fit. Configuration (`build_estimator`): 300 trees, minimum 3
+samples per leaf; see [`model.py`](modules/model.py.md).
+
+```mermaid
+flowchart TD
+    OZ["OzNet in-situ<br/>root-zone soil moisture<br/>(target y)"]
+    S["SMIPS TotalBucket<br/>~1 km coarse, mm"]
+    TR["Terrain covariates<br/>30 m: slope, aspect,<br/>TWI, HLI, accumulation"]
+    DOY["Seasonality<br/>doy_sin, doy_cos"]
+
+    S --> TBL["Training table<br/>one row per station-day"]
+    TR --> TBL
+    DOY --> TBL
+    OZ --> TBL
+
+    TBL -->|"features X + target y"| RF["Random Forest<br/>regressor"]
+
+    RF --> CV["Leave-site-out CV<br/>skill: NSE, ubRMSE, r"]
+    RF --> APP["Apply per 30 m pixel<br/>SMIPS + terrain + day"]
+    APP --> OUT["30 m soil-moisture field"]
+```
+
+The predictors and the in-situ target are assembled into one table; the Random
+Forest is fit on it, then either cross-validated or applied pixel-by-pixel to
+produce the 30 m map.
 
 ## Data quality: SMIPS WCS grid resampling
 
