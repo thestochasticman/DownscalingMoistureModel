@@ -175,9 +175,30 @@ prediction follows the shape of the observations. However, **per-station NSE is
 negative at 23 of 30 stations (median −0.56)** because the absolute-level bias
 dominates the per-station statistic. By the standard per-station definition the
 model does not yet reach NSE > 0 at most sites; the positive pooled value
-(+0.15) reflects the easier between-site comparison. Reducing the per-station
-bias (see [Future work](#future-work)) is what would bring per-station NSE above
-zero.
+(+0.15) reflects the easier between-site comparison.
+
+#### The bias is shrinkage toward the training mean
+
+The per-station bias is a systematic *shrinkage* effect: a Random Forest predicts
+by averaging training samples and cannot extrapolate, so it compresses
+predictions toward the central tendency.
+
+![Shrinkage diagnostic](figures/shrinkage_diagnostic.png)
+
+- **(a)** Per-station bias is negatively correlated with station wetness
+  (r = −0.62, slope −0.61): dry stations are over-predicted, wet stations
+  under-predicted. The model removes roughly 60 % of each station's departure
+  from the global mean.
+- **(b)** Predicted station means span a narrower range than observed (22 % vs
+  27 %), flatter than the 1:1 line.
+
+Two effects contribute, with different remedies. The dominant one is *limited
+identifiability*: SMIPS and terrain explain only ~40 % of the between-station
+level differences, so the unexplained baseline collapses to the mean. A
+distinguishing covariate (soil) is the root fix. A minor secondary effect is
+*sampling imbalance* (bias correlates weakly with record length, r = −0.22),
+addressable by sample weighting. Both are listed under
+[Future work](#future-work).
 
 ## 30 m downscaling and spatial transfer
 
@@ -278,6 +299,16 @@ which NSE is unstable when the between-station spread is small).
    [`downscale.py` note](modules/downscale.py.md#future-work-not-yet-implemented).
 3. **Bias correction.** A per-site offset or quantile mapping to SMIPS
    climatology would address the regional level bias directly.
+4. **Reduce prediction shrinkage.** The per-station bias is partly shrinkage
+   toward the training mean (slope −0.61; see Per-station performance). Two
+   complementary measures: (i) **sample weighting** so stations and sites
+   contribute equally regardless of record length, addressing the minor
+   sampling-imbalance component (bias–record-length r = −0.22); (ii) a
+   **less shrinkage-prone estimator** (gradient boosting, or a model with an
+   explicit linear SMIPS term), since Random-Forest leaf averaging cannot
+   extrapolate. These mitigate the symptom; the soil covariate (item 1) is the
+   root fix, since the dominant cause is limited identifiability rather than
+   imbalance.
 
 ## Reproducibility
 
@@ -288,6 +319,8 @@ that `PaddockTS` and the cached inputs are available):
 PYTHONPATH=. python handout/plot_grid_alignment.py  # grid_alignment
 PYTHONPATH=. python handout/plot_results.py         # smips_correction, leave_site_out_cv, per_site_timeseries
 PYTHONPATH=. python handout/plot_catchment.py       # catchment_results
+PYTHONPATH=. python handout/plot_per_station.py     # catchment_per_station, kyeamba_per_station
+PYTHONPATH=. python handout/plot_shrinkage.py       # shrinkage_diagnostic
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field)
 ```
 
