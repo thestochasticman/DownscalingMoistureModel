@@ -95,7 +95,7 @@ The model was first evaluated on four Kyeamba stations (June–July 2020) using
 evaluated on the fourth, which it has not seen, with the procedure repeated for
 each station in turn. This estimates performance at a new location, which is the
 intended application. The result was negative pooled skill (r = −0.45,
-r² = −1.16), with negligible SMIPS feature importance (0.006). The figures below
+NSE = −1.16), with negligible SMIPS feature importance (0.006). The figures below
 explain why.
 
 ![Leave-site-out cross-validation, Kyeamba](figures/leave_site_out_cv.png)
@@ -107,7 +107,7 @@ explain why.
   correct but the absolute level is not.
 - **(b)** Per station, the correlation (blue) is ≈0.9 throughout while the bias
   (red) is large (K10 +3.5, K12 −4.6). High correlation combined with large bias
-  produces the negative pooled r².
+  produces the negative pooled NSE.
 - **(c)** Feature importance is dominated by terrain (≈88 %); `smips_totalbucket`
   is near the bottom (≈0.006). For a method intended to downscale SMIPS, this
   indicates SMIPS is not contributing.
@@ -139,7 +139,7 @@ predictor.
   Yanco ≈26 mm), supplying the between-site signal absent in the single-cluster
   set.
 - **(b)** Leave-site-out fit across 30 held-out stations: pooled r = 0.54,
-  r² = +0.16.
+  NSE = +0.15.
 - **(c)** Feature importance: SMIPS becomes the highest-ranked predictor (0.34),
   followed by slope (0.27).
 - **(d)** Residual per-station bias persists (e.g. K12 −16 %, A5 +11 %).
@@ -149,12 +149,35 @@ predictor.
 | Metric | Kyeamba only (4 stations) | Catchment (30 stations) |
 |---|---|---|
 | Pooled leave-site-out r | −0.45 | +0.54 |
-| Pooled leave-site-out r² | −1.16 | +0.16 |
+| Pooled leave-site-out NSE | −1.16 | +0.15 |
 | SMIPS feature importance | 0.006 | 0.34 |
 | corr(target, SMIPS) | 0.25 | 0.53 |
 
-Between-site variation in SMIPS changes its feature importance from negligible
-to dominant and brings pooled cross-validation skill into the positive range.
+Between-site variation in SMIPS changes its feature importance from negligible to
+dominant and raises the pooled NSE from −1.16 to +0.15. The pooled figure should
+be read alongside the per-station results below, which are more demanding.
+
+### Per-station performance
+
+The pooled NSE is computed over all station-days together. Because the observed
+values span dry (Yanco) to wet (Adelong) sites, the between-site variance enters
+the denominator and makes the pooled figure relatively lenient. The standard
+per-station (temporal) NSE, computed on each station's own series, is the more
+exacting test.
+
+![Leave-site-out, all 30 stations](figures/catchment_per_station.png)
+
+![Leave-site-out, Kyeamba stations](figures/kyeamba_per_station.png)
+
+Across the 30 held-out stations the model reproduces temporal dynamics well
+(median per-station r = 0.75, median ubRMSE = 3.9 %): in each panel the
+prediction follows the shape of the observations. However, **per-station NSE is
+negative at 23 of 30 stations (median −0.56)** because the absolute-level bias
+dominates the per-station statistic. By the standard per-station definition the
+model does not yet reach NSE > 0 at most sites; the positive pooled value
+(+0.15) reflects the easier between-site comparison. Reducing the per-station
+bias (see [Future work](#future-work)) is what would bring per-station NSE above
+zero.
 
 ## 30 m downscaling and spatial transfer
 
@@ -177,6 +200,7 @@ stations reporting).
   | ubRMSE | 2.4 % | Bias-removed error is low; spatial pattern transfers |
   | Bias | +11.3 % | Systematic over-prediction of the semi-arid Yanco plains by a model trained on wetter upland sites |
   | r | 0.41 | Moderate, across 12 stations |
+  | NSE | −20 | Strongly negative because this is a single date: the between-station spread is small, so the +11.3 % bias dominates the statistic. NSE is informative over the full record (the leave-site-out value above), not for a one-day spatial snapshot. |
 
 **Assessment.** Under full-region transfer the relative spatial structure is
 reproduced (ubRMSE 2.4 %) while the absolute level carries a substantial regional
@@ -193,10 +217,39 @@ the absolute moisture level. See [Limitations](#limitations) and
 | ubRMSE | Bias-removed RMSE, √(RMSE² − bias²); the standard soil-moisture skill statistic |
 | Bias | mean(pred − obs) |
 | r | Pearson correlation |
-| r² | 1 − SS_res / SS_tot (may be negative when bias dominates) |
+| NSE | Nash-Sutcliffe efficiency, 1 − Σ(pred − obs)² / Σ(obs − mean obs)². NSE = 1 is perfect, NSE > 0 is more skilful than the observed mean, NSE < 0 is worse. Identical to the coefficient of determination (returned as `r2` in code). |
 
-Generalisation skill is reported as the leave-site-out or leave-region-out
-value in all cases.
+Generalisation skill is reported as the leave-site-out or leave-region-out value
+in all cases. NSE > 0 (skill beyond the observed mean) is the conventional
+threshold for a useful soil-moisture model. NSE can be computed *pooled* (over
+all station-days) or *per-station* (each station's own series); the two differ
+substantially here and both are reported. The per-station figure is the more
+exacting and is the one to weight.
+
+## Interpreting the result
+
+The outcome is best read as a validated proof of concept rather than a finished
+product. The pipeline works end to end and SMIPS is the dominant predictor, but
+the skill is limited by absolute-level bias.
+
+- **Dynamics are reproduced well.** Across the 30 held-out stations the median
+  per-station correlation is 0.75 and the median ubRMSE is 3.9 %. The model
+  follows the shape of each station's time series.
+- **Per-station NSE is not yet positive at most sites.** Median per-station
+  NSE is −0.56, positive at only 7 of 30 stations, because a per-station level
+  bias dominates the statistic. The pooled NSE (+0.15) is positive but is a more
+  lenient measure (it credits the model for separating dry and wet sites). By the
+  standard per-station definition the model does not yet clear NSE > 0.
+- **Cross-region transfer is limited by the same bias.** With Yanco withheld
+  entirely, the spatial pattern transfers (ubRMSE 2.4 %) but the level carries a
+  +11.3 % bias. The model should not be applied to a new, climatically different
+  region without bias correction.
+
+The limiting factor throughout is absolute-level bias, not dynamics. Reducing it
+(soil covariates and/or bias correction; see [Future work](#future-work)) is the
+prerequisite for positive per-station NSE. When evaluating a new dataset, weight
+the per-station NSE over the full record, not a single-date spatial snapshot (for
+which NSE is unstable when the between-station spread is small).
 
 ## Limitations
 

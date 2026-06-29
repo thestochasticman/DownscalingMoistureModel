@@ -99,7 +99,7 @@ ax[1,1].plot(lim, lim, "k--", lw=1)
 ax[1,1].set(xlim=lim, ylim=lim, xlabel="OzNet observed (%)", ylabel="downscaled @ station (%)",
             title="(d) Held-out validation at 12 Yanco stations")
 ax[1,1].text(.03, .97, f"RMSE={M['rmse']:.2f}%\nubRMSE={M['ubrmse']:.2f}%\n"
-             f"bias={M['bias']:+.2f}%\nr={M['r']:.2f}  n={M['n']}",
+             f"bias={M['bias']:+.2f}%\nNSE={M['nse']:.2f}\nr={M['r']:.2f}  n={M['n']}",
              transform=ax[1,1].transAxes, va="top", fontsize=10,
              bbox=dict(boxstyle="round", fc="w", alpha=.8))
 ax[1,1].grid(alpha=.3)

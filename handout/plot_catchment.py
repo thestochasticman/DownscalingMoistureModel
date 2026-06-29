@@ -61,7 +61,7 @@ for s in SITES:
 lim = [0, 55]
 ax[0,1].plot(lim, lim, "k--", lw=1)
 ax[0,1].set(xlim=lim, ylim=lim, xlabel="observed root-zone (%)", ylabel="LOSO predicted (%)",
-            title=f"(b) Leave-site-out fit  (pooled r={pooled['r']:.2f}, r²={pooled['r2']:.2f}, "
+            title=f"(b) Leave-site-out fit  (pooled r={pooled['r']:.2f}, NSE={pooled['nse']:.2f}, "
                   f"RMSE={pooled['rmse']:.1f})")
 leg = ax[0,1].legend(fontsize=9, markerscale=2);
 for lh in leg.legend_handles: lh.set_alpha(1)

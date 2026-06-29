@@ -39,8 +39,10 @@ def build_estimator(**kwargs) -> RandomForestRegressor:
 def metrics(y_true, y_pred) -> dict:
     """Standard soil-moisture validation metrics.
 
-    rmse, ubrmse (bias-removed RMSE), bias (pred-obs), r (Pearson),
-    r2 (1 - SS_res/SS_tot), and n.
+    Returns rmse, ubrmse (bias-removed RMSE), bias (pred-obs), r (Pearson),
+    nse (Nash-Sutcliffe efficiency, 1 - SS_res/SS_tot), and n. NSE > 0 means the
+    prediction is more skilful than the observed mean; NSE = 1 is perfect. NSE is
+    identical to the coefficient of determination, also returned as ``r2``.
     """
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
@@ -48,7 +50,8 @@ def metrics(y_true, y_pred) -> dict:
     y_true, y_pred = y_true[ok], y_pred[ok]
     n = y_true.size
     if n < 2:
-        return dict(rmse=np.nan, ubrmse=np.nan, bias=np.nan, r=np.nan, r2=np.nan, n=n)
+        return dict(rmse=np.nan, ubrmse=np.nan, bias=np.nan, r=np.nan,
+                    nse=np.nan, r2=np.nan, n=n)
     err = y_pred - y_true
     bias = float(err.mean())
     rmse = float(np.sqrt((err ** 2).mean()))
@@ -56,8 +59,8 @@ def metrics(y_true, y_pred) -> dict:
     r = float(np.corrcoef(y_true, y_pred)[0, 1])
     ss_res = float(((y_true - y_pred) ** 2).sum())
     ss_tot = float(((y_true - y_true.mean()) ** 2).sum())
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
-    return dict(rmse=rmse, ubrmse=ubrmse, bias=bias, r=r, r2=r2, n=n)
+    nse = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan  # Nash-Sutcliffe efficiency
+    return dict(rmse=rmse, ubrmse=ubrmse, bias=bias, r=r, nse=nse, r2=nse, n=n)
 
 
 def fit(table: pd.DataFrame, estimator: RandomForestRegressor | None = None
