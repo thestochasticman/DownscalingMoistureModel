@@ -43,5 +43,7 @@ the absolute level is biased, and SMIPS importance is ≈0.006. The four station
 fall within approximately one SMIPS cell, leaving no between-station signal in
 the coarse predictor. Expanding the training set to three catchments
 (see the [README](../README.md)) raises pooled skill to r = 0.54, NSE = +0.15 and
-increases SMIPS importance to 0.34. It remains the best-performing model tested
-(see [Model comparison](../README.md#model-comparison)).
+increases SMIPS importance to 0.34. It was the best-performing model until the
+climatology + soil feature work produced [`model4`](model4.md), which supersedes
+it on every metric (see [Model comparison](../README.md#model-comparison));
+`model1` is retained as the baseline the improvement is measured against.

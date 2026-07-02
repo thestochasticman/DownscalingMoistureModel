@@ -29,6 +29,11 @@ from emt.covariates import terrain_covariates, sample_points, TERRAIN_VARS
 
 SMIPS_COL = "smips_totalbucket"
 
+# SMIPS pixel-climatology features (see add_smips_climatology). Derived from
+# SMIPS alone, so they are available at every pixel at inference -- unlike
+# station identity, they leak nothing about the in-situ target.
+CLIM_VARS = ("smips_mean_px", "smips_std_px", "smips_anom", "smips_z")
+
 # Stations within this lon/lat span share one SMIPS cube ("cluster fetch": one
 # WCS request per day for the whole cluster instead of one per station). Wider
 # groups (e.g. the scattered regional M-sites) fall back to per-station cubes.
@@ -42,6 +47,61 @@ def add_temporal_features(df: pd.DataFrame, time_col: str = "time") -> pd.DataFr
     df["doy_sin"] = np.sin(2 * np.pi * doy / 365.25)
     df["doy_cos"] = np.cos(2 * np.pi * doy / 365.25)
     return df
+
+
+def add_smips_climatology(table: pd.DataFrame) -> pd.DataFrame:
+    """Add SMIPS pixel-climatology features (``CLIM_VARS``) per station.
+
+    For each station's SMIPS series (daily-reindexed, short gaps interpolated):
+
+        smips_mean_px, smips_std_px   long-term mean/std of the pixel's SMIPS
+        smips_anom                    today's SMIPS minus the pixel mean
+        smips_z                       the anomaly in pixel standard deviations
+
+    This factors the coarse predictor into a static *level* (the pixel's
+    climatology -- a proxy for the local moisture baseline) and a dynamic
+    *departure*. Both are functions of SMIPS only, so they are computable at
+    every 30 m pixel at inference (from the pixel's SMIPS record) and carry no
+    in-situ information -- unlike per-site covariates, they cannot memorise
+    station identity. Empirically this is the largest single skill lever found
+    (see handout).
+    """
+    t = table.copy()
+    t["time"] = pd.to_datetime(t["time"])
+    out = []
+    for stn, g in t.groupby("station", sort=False):
+        g = g.sort_values("time").set_index("time")
+        s = g[SMIPS_COL].reindex(
+            pd.date_range(g.index.min(), g.index.max(), freq="D"))
+        s = s.interpolate(limit=7)          # bridge short gaps only
+        g["smips_mean_px"] = s.mean()
+        g["smips_std_px"] = s.std()
+        g["smips_anom"] = g[SMIPS_COL] - g["smips_mean_px"]
+        g["smips_z"] = g["smips_anom"] / g["smips_std_px"]
+        out.append(g.reset_index(names="time"))
+    return pd.concat(out, ignore_index=True)
+
+
+def add_soil_covariates(table: pd.DataFrame, coords: pd.DataFrame,
+                        start: date, end: date) -> pd.DataFrame:
+    """Attach static SLGA soil covariates (``emt.slga.SOIL_VARS``) per station.
+
+    Samples the cached per-station SLGA rasters (``emt.slga.soil_covariates``)
+    at each station's coordinates. ``start``/``end`` only shape the per-station
+    Query stub (soil itself is static) -- pass the study period so the cached
+    rasters are reused.
+    """
+    from emt.slga import soil_covariates, SOIL_VARS
+    from emt.covariates import sample_points as _sample
+
+    coords = coords.set_index("station") if "station" in coords.columns else coords
+    rows = []
+    for stn in table["station"].unique():
+        lat, lon = float(coords.loc[stn, "lat"]), float(coords.loc[stn, "lon"])
+        q = query_for_station(stn, lat, lon, start, end)
+        pt = _sample(soil_covariates(q), lon, lat)
+        rows.append({"station": stn, **{v: float(pt[v].values) for v in SOIL_VARS}})
+    return table.merge(pd.DataFrame(rows), on="station", how="left")
 
 
 def station_features(station: str, site: str, lat: float, lon: float,

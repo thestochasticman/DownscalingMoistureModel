@@ -107,9 +107,14 @@ def smips_day(d: date | str, bbox, var: str = "totalbucket") -> xr.DataArray:
 
 def smips_cube(start: date | str, end: date | str, bbox,
                var: str = "totalbucket", workers: int = 8,
-               skip_missing: bool = True) -> xr.DataArray:
-    """Fetch a ``(time, y, x)`` raw SMIPS cube over ``bbox`` (inclusive of both ends)."""
-    days = [d.date() for d in pd.date_range(start, end, freq="D")]
+               skip_missing: bool = True, days: list[date] | None = None) -> xr.DataArray:
+    """Fetch a ``(time, y, x)`` raw SMIPS cube over ``bbox`` (inclusive of both ends).
+
+    ``days`` overrides the daily range with an explicit list of dates (used by
+    :func:`smips_climatology` to fetch a thinned sample).
+    """
+    if days is None:
+        days = [d.date() for d in pd.date_range(start, end, freq="D")]
     slices: dict[date, xr.DataArray] = {}
 
     def fetch(d):
@@ -170,6 +175,41 @@ def download_smips(query: Query, var: str = "totalbucket", workers: int = 8,
     print(f"  saved: {filename} ({cube.sizes['time']} days, "
           f"{cube.sizes.get('y')}x{cube.sizes.get('x')} px)")
     return cube
+
+
+def smips_climatology(query: Query, var: str = "totalbucket", step_days: int = 5,
+                      workers: int = 8, reload: bool = False) -> xr.Dataset:
+    """Per-pixel SMIPS mean/std over the query period (the model4 level features).
+
+    Fetches every ``step_days``-th day over ``[query.start, query.end]`` and
+    reduces over time. Thinning keeps the request count tractable for multi-year
+    AOI climatologies (a 5-year period at ``step_days=5`` is ~365 samples per
+    pixel -- ample for a stable mean/std). Cached like the daily cubes.
+
+    Returns:
+        Dataset with ``smips_mean_px`` and ``smips_std_px`` on the SMIPS grid.
+    """
+    filename = (f"{query.tmp_dir}/Environmental/"
+                f"{query.stub}_smips_{var}_clim{step_days}.nc")
+    if not reload and exists(filename):
+        print(f"  cached: {filename}")
+        with xr.open_dataset(filename) as ds:
+            return ds.load()
+
+    makedirs(f"{query.tmp_dir}/Environmental", exist_ok=True)
+    days = [d.date() for d in
+            pd.date_range(query.start, query.end, freq=f"{step_days}D")]
+    print(f"  fetching SMIPS climatology ({var}) for bbox {query.bbox}: "
+          f"{len(days)} sample days...", flush=True)
+    cube = smips_cube(days[0], days[-1], tuple(query.bbox), var=var,
+                      workers=workers, days=days)
+    clim = xr.Dataset({"smips_mean_px": cube.mean("time"),
+                       "smips_std_px": cube.std("time")})
+    clim.attrs.update(cube.attrs, step_days=step_days,
+                      period=f"{query.start}..{query.end}", n_samples=len(days))
+    clim.to_netcdf(filename)
+    print(f"  saved: {filename}")
+    return clim
 
 
 def test():

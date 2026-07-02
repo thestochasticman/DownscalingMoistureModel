@@ -33,11 +33,20 @@ def _doy_features(day: date) -> tuple[float, float]:
 
 
 def downscale(model, query: Query, day: date | str, features: list[str],
-              smips_var: str = "totalbucket") -> xr.Dataset:
+              smips_var: str = "totalbucket",
+              extra_layers: dict | None = None) -> xr.Dataset:
     """Downscale SMIPS to the 30 m terrain grid for one ``day`` over ``query``.
 
     Model-agnostic: ``model`` is any fitted estimator and ``features`` is its
     feature list (e.g. ``emt.model1.model.FEATURES``).
+
+    ``extra_layers`` maps extra feature names to rasters (``xr.DataArray``,
+    any grid/CRS -- reprojected onto the terrain grid here) or scalars. Models
+    needing per-pixel statics supply them this way, e.g. model4's SMIPS
+    climatology (:func:`emt.smips.smips_climatology`) and SLGA soil
+    (:func:`emt.slga.soil_covariates`). If the feature list contains
+    ``smips_anom``/``smips_z`` they are derived here from the day's SMIPS and a
+    supplied ``smips_mean_px``/``smips_std_px``.
 
     Returns a Dataset on the terrain UTM grid with:
       ``sm_pred``       -- 30 m predicted root-zone soil moisture (%),
@@ -61,6 +70,21 @@ def downscale(model, query: Query, day: date | str, features: list[str],
         "doy_sin": np.full(grid.shape, doy_sin),
         "doy_cos": np.full(grid.shape, doy_cos),
     }
+    for name, obj in (extra_layers or {}).items():
+        if isinstance(obj, xr.DataArray):
+            # Coarse statics inherit per-pixel, like SMIPS (nearest).
+            if obj.rio.crs is None:
+                obj = obj.rio.write_crs(4326)
+            layers[name] = obj.rio.reproject_match(
+                grid, resampling=Resampling.nearest).values
+        else:
+            layers[name] = np.full(grid.shape, float(obj))
+    # Derived climatology features (model4): anomaly of the day vs pixel mean.
+    if "smips_anom" in features and "smips_anom" not in layers:
+        layers["smips_anom"] = layers[SMIPS_COL] - layers["smips_mean_px"]
+    if "smips_z" in features and "smips_z" not in layers:
+        layers["smips_z"] = ((layers[SMIPS_COL] - layers["smips_mean_px"])
+                             / layers["smips_std_px"])
     # Flatten in the model's exact feature order; predict only finite pixels.
     cols = [layers[f].ravel() for f in features]
     X = np.column_stack(cols)

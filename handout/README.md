@@ -23,7 +23,7 @@ corresponding note under [`modules/`](modules/); all figures are reproducible
 | 3a. Coarse predictor | [`smips.py`](modules/smips.py.md) | SMIPS `TotalBucket` field (mm), the quantity being downscaled |
 | 3b. Fine predictors | [`covariates.py`](modules/covariates.py.md) | 30 m terrain covariates (elevation, slope, northness/eastness, TWI, HLI, flow accumulation) |
 | 4. Feature assembly | [`features.py`](modules/features.py.md) | Training table: one record per station-day (target, SMIPS, terrain, seasonality) |
-| 5. Model | [`model1`](modules/model1.md) · [`model2`](modules/model2.md) | Random Forest (baseline) and a linear comparison; shared scoring in `evaluation.py` |
+| 5. Model | [`model1`](modules/model1.md) · [`model2`](modules/model2.md) · [`model3`](modules/model3.md) · [`model4`](modules/model4.md) | Random Forest (baseline), a linear comparison, gradient boosting, and the improved climatology+soil model; shared scoring and cross-validation in [`evaluation.py`](modules/evaluation.py.md) |
 | 6. Downscaling | [`downscale.py`](modules/downscale.py.md) | Per-pixel application of the model to produce a 30 m field |
 
 ## The model
@@ -94,6 +94,45 @@ flowchart TD
 The predictors and the in-situ target are assembled into one table; the Random
 Forest is fit on it, then either cross-validated or applied pixel-by-pixel to
 produce the 30 m map.
+
+## Evaluation
+
+Reported skill is always a **held-out** estimate, produced by **leave-one-site-out
+(LOSO) cross-validation** — a *spatial* split in which the hold-out unit is a
+whole **station**, not a random subset of rows and not a time span. Grouping on
+the `station` column with scikit-learn's `LeaveOneGroupOut`, the procedure runs
+one fold per station:
+
+- **the held-out unit is one station** — all of its station-day rows form the
+  test set;
+- **the training set is every other station** — all rows from the remaining
+  stations;
+- a fresh model is fit each fold, so no fitted state leaks between folds.
+
+After all folds every row has a prediction from a model that **never saw that
+station**. Holding out a whole station tests exactly the intended use — predicting
+an unobserved location — whereas a random row split would leak each station's own
+level into training and inflate apparent skill. Station coordinates (`lat`/`lon`)
+are excluded from the features for the same reason; `station` is used only as the
+grouping variable.
+
+The out-of-fold predictions are scored two ways, and both are reported:
+
+- **Pooled** — over all station-days at once. Because observed values span dry
+  (Yanco) to wet (Adelong) sites, the between-site variance enters the NSE
+  denominator, making the pooled figure comparatively lenient.
+- **Per-station** — within each station's own series. This removes the between-site
+  spread and is the more exacting temporal test; it is the figure to weight.
+
+The two differ substantially here (pooled NSE +0.15 vs per-station NSE negative at
+23/30 stations), and that gap is the central result: the model reproduces
+*dynamics* but carries a per-station absolute-level *bias*
+(see [Per-station performance](#per-station-performance)). One caveat: the split
+is purely spatial — there is no temporal hold-out, so LOSO measures spatial
+transfer, not forecasting into unseen time. The full procedure, return values,
+and metric definitions are documented in
+[`evaluation.py`](modules/evaluation.py.md); metric formulae are also tabulated
+under [Metrics](#metrics).
 
 ## Data quality: SMIPS WCS grid resampling
 
@@ -305,34 +344,40 @@ in all cases. NSE > 0 (skill beyond the observed mean) is the conventional
 threshold for a useful soil-moisture model. NSE can be computed *pooled* (over
 all station-days) or *per-station* (each station's own series); the two differ
 substantially here and both are reported. The per-station figure is the more
-exacting and is the one to weight.
+exacting and is the one to weight. The cross-validation procedure that produces
+these held-out predictions — leave-one-site-out, grouped by station — is
+documented in [`evaluation.py`](modules/evaluation.py.md).
 
 ## Interpreting the result
 
 The outcome is best read as a validated proof of concept rather than a finished
-product. The pipeline works end to end and SMIPS is the dominant predictor, but
-the skill is limited by absolute-level bias.
+product. The pipeline works end to end and SMIPS is the dominant predictor; the
+limiting factor throughout is absolute-level bias, not dynamics. The sections
+above trace how that bias was diagnosed and then substantially reduced:
 
-- **Dynamics are reproduced well.** Across the 30 held-out stations the median
-  per-station correlation is 0.75 and the median ubRMSE is 3.9 %. The model
-  follows the shape of each station's time series.
-- **Per-station NSE is not yet positive at most sites.** Median per-station
-  NSE is −0.56, positive at only 7 of 30 stations, because a per-station level
-  bias dominates the statistic. The pooled NSE (+0.15) is positive but is a more
-  lenient measure (it credits the model for separating dry and wet sites). By the
-  standard per-station definition the model does not yet clear NSE > 0.
-- **Cross-region transfer is limited by the same bias.** With Yanco withheld
-  entirely, the spatial pattern transfers (ubRMSE 2.4 %) but the level carries a
-  +11.3 % bias. The model should not be applied to a new, climatically different
-  region without bias correction.
+- **Dynamics were reproduced well from the start.** Across the 30 held-out
+  stations, median per-station correlation 0.75–0.80 and ubRMSE ≈3.5–3.9 % for
+  every model tested. The models follow the shape of each station's series.
+- **The baseline model (model1) did not clear per-station NSE > 0** (median
+  −0.56, positive at 7/30): a per-station level bias dominated the statistic,
+  while the lenient pooled figure (+0.15) hid it. This diagnosis — level, not
+  dynamics — drove everything after.
+- **model4 closes most of that gap** (median per-station NSE −0.07, 14/30
+  positive, pooled +0.35) by giving the model a legitimate level signal (SMIPS
+  pixel climatology) plus soil, under a heavily regularised estimator
+  ([The improvement search](#the-improvement-search-model4)). Half the stations
+  now clear the NSE > 0 threshold; the median sits at it.
+- **Cross-region transfer improved from failing to marginal.** Under
+  leave-region-out, model1 scored −0.72 (Yanco bias +9.2 %); model4 scores
+  +0.12 with all regional biases smaller. Application to a climatically
+  different region still warrants bias correction, but the failure mode is no
+  longer categorical.
 
-The limiting factor throughout is absolute-level bias, not dynamics. An SLGA soil
-covariate was tested as the obvious remedy but did not help
-([Soil covariate experiment](#soil-covariate-experiment-negative-result)); the
-remaining levers are more training sites and bias correction (see
-[Future work](#future-work)). When evaluating a new dataset, weight the
-per-station NSE over the full record, not a single-date spatial snapshot (for
-which NSE is unstable when the between-station spread is small).
+The oracle diagnostic (NSE 0.83 with true station means) shows the remaining
+deficit is still almost entirely the site-level baseline — the lever is more
+training sites (see [Future work](#future-work)). When evaluating a new dataset,
+weight the per-station NSE over the full record, not a single-date spatial
+snapshot (for which NSE is unstable when the between-station spread is small).
 
 ## Soil covariate experiment (negative result)
 
@@ -360,59 +405,131 @@ soil set produced the *best* per-station NSE (15/30 positive) yet the *worst*
 pooled skill (−0.27), i.e. it fitted each station locally while scrambling the
 cross-site ranking that a spatial product requires.
 
-The conclusion is that the residual bias is not a missing soil feature but
-**too few training sites** for any site-level covariate to generalise. The loader
-([`slga.py`](modules/slga.py.md)) is retained for a future attempt with a denser
-station network; soil is not in the current model.
+The conclusion at the time was that the residual bias is not a missing soil
+feature but **too few training sites** for any site-level covariate to
+generalise. The loader ([`slga.py`](modules/slga.py.md)) was retained.
+
+**Postscript (model4): the negative result was conditional, not absolute.** Once
+the SMIPS pixel climatology supplies a legitimate level anchor
+([The improvement search](#the-improvement-search-model4)), the same four soil
+covariates *add* skill and give the best per-station profile. Without an anchor
+the model pressed soil into service as a station identifier (the leakage
+described above); with one, soil contributes genuine texture signal. Soil is a
+feature of [`model4`](modules/model4.md).
 
 ## Model comparison
 
 The estimator is isolated in per-model packages ([`emt/model1`](modules/model1.md),
-[`emt/model2`](modules/model2.md)) that share the data, features, and scoring
-harness ([`emt/evaluation.py`](../emt/evaluation.py)), so approaches are compared
+[`emt/model2`](modules/model2.md), [`emt/model3`](modules/model3.md)) that share
+the data, features, and scoring harness
+([`evaluation.py`](modules/evaluation.py.md)), so approaches are compared
 directly. Results to date:
 
-| Model | Estimator | pooled NSE | r | per-station NSE > 0 | shrinkage slope |
-|---|---|---|---|---|---|
-| [model1](modules/model1.md) | Random Forest | **+0.15** | **0.53** | 7/30 | −0.61 |
-| [model2](modules/model2.md) | Linear (Ridge, scaled) | +0.02 | 0.36 | 12/30 | −0.98 |
+| Model | Estimator | cross-site (pooled NSE, r) | per-station NSE > 0 |
+|---|---|---|---|
+| [**model4**](modules/model4.md) | Regularised HistGB + climatology + soil | **+0.35, 0.62** | **14/30** |
+| [model1](modules/model1.md) | Random Forest | +0.15, 0.53 | 7/30 |
+| [model3](modules/model3.md) | Gradient boosting (HistGB, stock) | +0.12, 0.47 | 8/30 |
+| [model2](modules/model2.md) | Linear (Ridge, scaled) | +0.02, 0.36 | 12/30 |
+| Huber (robust linear) | tested only | −0.02, 0.34 | 15/30 |
 
-`model2` was built to test whether an extrapolating (non-averaging) estimator
-reduces the shrinkage that Random-Forest leaf-averaging causes. It did not: the
-linear model has worse cross-site skill and a *steeper* shrinkage slope (−0.98).
-A single global hyperplane extracts less of the limited between-site signal than
-the Random Forest's nonlinear splits. As with the soil experiment, this points to
-**too few sites (not the estimator) as the binding constraint**. `model1` (RF)
-remains the production model.
+Among models 1–3 the results traced a **cross-site ↔ per-station tradeoff**:
+every configuration that put more stations at positive per-station NSE gave up
+cross-site skill, and vice versa. `model1` (Random Forest) took the cross-site
+end (+0.15, but a black box); `model2` (linear) the per-station end (12/30, with
+interpretable, physically-signed coefficients — slope negative, SMIPS positive);
+`model3` (stock gradient boosting) landed between (+0.12, best per-station
+ubRMSE 3.5 %). Strengthening the linear model did not help (penalty tuning was a
+no-op; polynomial features exploded out of sample), and stock boosting could not
+overtake the forest — which suggested the ceiling was set by too few sites, not
+the estimator.
+
+**[`model4`](modules/model4.md) broke that tradeoff** — better on *both* axes at
+once (pooled NSE +0.35 **and** 14/30 per-station, median per-station NSE −0.56 →
+−0.07). The tradeoff was therefore not a law of the problem but a symptom of a
+**missing feature**: none of the earlier models had a legitimate way to set a
+location's absolute moisture level, so they could only trade level errors
+between the pooled and per-station views. See the next section.
+
+## The improvement search: model4
+
+A systematic search (features from existing data, new covariate sources,
+estimator settings, sample weighting, ensembling, problem restructuring — all
+scored by the same leave-site-out harness) produced
+[`model4`](modules/model4.md), which more than doubles cross-site skill while
+also improving the per-station profile:
+
+| Metric (30 stations, 2006–2010) | model1 | model4 |
+|---|---|---|
+| Pooled LOSO NSE / r | +0.15 / 0.53 | **+0.35 / 0.62** |
+| Per-station NSE > 0 | 7/30 | **14/30** |
+| Median per-station NSE | −0.56 | **−0.07** |
+| Leave-region-out NSE | −0.72 | **+0.12** |
+
+Three ingredients, each independently validated (full detail in the
+[module note](modules/model4.md)):
+
+1. **SMIPS pixel climatology** — the pixel's long-term SMIPS mean/std plus the
+   day's anomaly/z-score. This factors the coarse predictor into a static
+   *level* and a dynamic *departure*, supplying the missing local-baseline
+   signal. Because it derives from SMIPS alone it is available at every pixel at
+   inference and cannot memorise stations. Largest single lever (+0.08 pooled
+   NSE on every estimator tested).
+2. **Extreme boosting regularisation** — skill rises monotonically as trees
+   shrink, peaking at `max_leaf_nodes=3` (seed-stable). Tiny trees cannot
+   memorise site quirks.
+3. **Soil, rehabilitated** — with the climatology anchoring the level, the SLGA
+   covariates add skill instead of acting as station IDs (see the re-reading of
+   the [soil experiment](#soil-covariate-experiment-negative-result) below).
+
+Ideas tested that did **not** survive: SILO climate dynamics (+0.02 alone, ~0
+with soil), SMIPS temporal lags, aridity statics, equal-station weighting,
+two-stage decomposition, RF+HGB ensembling (pooled tie, worse per-station).
+
+Two results frame what remains:
+
+- **Oracle ceiling.** Giving the model each station's *true* mean level (keeping
+  the learned dynamics) yields NSE 0.83 with 28/30 stations positive — almost
+  the entire remaining gap is the site-level baseline, so additional sites buy
+  a better *level* model specifically.
+- **Leave-region-out check.** Because the winning configuration was selected on
+  the same 30-station LOSO, it was re-validated under leave-region-out (train
+  two catchments, predict the third — never used for selection): model1 −0.72 →
+  model4 **+0.12**, with every regional bias smaller (Kyeamba +0.45; Yanco bias
+  +9.2 → +6.1; Adelong −10.4 → −7.3). The gains generalise; the level problem
+  under full-region transfer is reduced but not solved.
 
 ## Limitations
 
-- **Absolute level bias on transfer.** The principal residual error is a regional
-  level offset (+11.3 % for Yanco under leave-region-out). Predictors currently
-  encode moisture *dynamics* (low ubRMSE) but not the local *baseline*, and
-  neither a soil covariate nor a linear estimator supplied it (above).
-- **Training-set coverage.** Thirty stations across three catchments are too few
-  for a site-level covariate to generalise; this is the principal limit on
-  between-site skill. More sites are the main lever.
+- **Residual level bias on transfer.** The principal residual error remains a
+  regional level offset, though much reduced: model4 halves the leave-site-out
+  per-station deficit (median NSE −0.56 → −0.07) and moves leave-region-out from
+  −0.72 to +0.12, but regional biases of ±6–7 % persist. Application to a
+  climatically different region still warrants bias correction.
+- **Training-set coverage.** Thirty stations across three catchments remain the
+  binding constraint: the oracle diagnostic (NSE 0.83 with true station means)
+  shows the remaining gap is almost entirely the site-level baseline, which more
+  sites would constrain directly.
 - **Single-date downscaling demonstration.** Stage 6 is evaluated on one date;
-  multi-date and seasonal evaluation remains outstanding (Stage 7).
+  multi-date and seasonal evaluation remains outstanding (Stage 7). The
+  downscaling figures also predate model4 (they show model1); model4 inference
+  additionally needs the SMIPS-climatology and soil rasters over the AOI
+  (supported via `downscale(..., extra_layers=...)`, not yet demonstrated).
 
 ## Future work
 
-1. **More training sites (priority).** The soil experiment indicates the binding
-   constraint is too few sites for a site-level covariate to generalise. Adding
-   stations (e.g. the scattered regional Murrumbidgee M-sites, or other networks)
-   should both improve transfer skill directly and give soil covariates enough
-   support to be re-tested.
+1. **More training sites (priority, now quantified).** The oracle diagnostic
+   bounds the payoff: a perfect site-level model would take NSE from 0.35 to
+   0.83. Adding stations (e.g. the scattered regional Murrumbidgee M-sites, or
+   other networks) directly constrains the level model — the one component the
+   current data cannot pin down — and would also let the SILO climate features
+   (marginal at 30 sites) be re-tested.
 2. **Bias correction.** A per-site offset or quantile mapping to SMIPS
-   climatology would address the regional level bias directly.
-3. **Reduce prediction shrinkage.** The per-station bias is partly shrinkage
-   toward the training mean (slope −0.61; see Per-station performance).
-   **Sample weighting** so stations and sites contribute equally regardless of
-   record length would address the minor sampling-imbalance component
-   (bias–record-length r = −0.22). A linear estimator was already tried as a
-   less-averaging alternative and did worse ([Model comparison](#model-comparison));
-   **gradient boosting** remains an untested middle ground.
+   climatology would address the residual regional level bias (±6–7 % under
+   leave-region-out for model4).
+3. **model4 downscaling demonstration.** Regenerate the Stage 6 Yanco transfer
+   demo with model4 (climatology + soil rasters via `extra_layers`) and compare
+   against the model1 figures; then the multi-date Stage 7 evaluation.
 4. **Mass conservation.** Constrain the 30 m field to aggregate to a coarse
    reference within each cell (decomposition into cell mean plus terrain anomaly,
    with the mean rebased onto the reference). Requires a coarse reference in the
