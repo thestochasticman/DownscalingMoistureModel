@@ -541,18 +541,61 @@ Prediction (colour) against observation (black); each title gives that station's
 r and NSE. Dynamics track well throughout (median per-station r 0.80); the
 remaining misses are level offsets (e.g. K12, K13 — parallel but shifted).
 
-Two results frame what remains:
+### The oracle ceiling: how much is left, and where
 
-- **Oracle ceiling.** Giving the model each station's *true* mean level (keeping
-  the learned dynamics) yields NSE 0.83 with 28/30 stations positive — almost
-  the entire remaining gap is the site-level baseline, so additional sites buy
-  a better *level* model specifically.
-- **Leave-region-out check.** Because the winning configuration was selected on
-  the same 30-station LOSO, it was re-validated under leave-region-out (train
-  two catchments, predict the third — never used for selection): model1 −0.72 →
-  model4 **+0.12**, with every regional bias smaller (Kyeamba +0.45; Yanco bias
-  +9.2 → +6.1; Adelong −10.4 → −7.3). The gains generalise; the level problem
-  under full-region transfer is reduced but not solved.
+The remaining error can be located precisely. Any station's soil-moisture series
+splits into two parts:
+
+```
+moisture(station, day) = station's long-term mean  +  daily departure from it
+                         └───── the "level" ─────┘     └──── the "dynamics" ───┘
+```
+
+- the **level** is how wet a place is *on average* (Adelong ≈35 %, Yanco ≈22 %),
+  set by local soil, climate and drainage — nearly constant in time;
+- the **dynamics** are the wetting and drying *around* that mean, which SMIPS and
+  seasonality track well.
+
+A model must get **both** right. A prediction can reproduce the shape of the
+wiggles perfectly and still score a poor NSE if it sits at the wrong height —
+which is exactly the residual per-station bias (median per-station NSE −0.07
+despite median r 0.80).
+
+The **oracle** experiment isolates the two. For each held-out station it hands
+the model that station's *true* mean level (which in real use is unknown,
+because the station is unobserved) and keeps the same learned dynamics model
+(trained only on the other stations, predicting daily departures). The
+prediction becomes `true station mean + predicted departure`, so all level error
+is removed and only the dynamics error remains:
+
+| | pooled NSE | per-station NSE > 0 |
+|---|---|---|
+| model4 (must infer the level) | 0.35 | 14/30 |
+| **oracle (level supplied)** | **0.83** | **28/30** |
+
+The dynamics model is identical in both rows, so the entire 0.35 → 0.83 jump is
+attributable to fixing the level. **The dynamics are nearly solved; almost the
+whole remaining gap is the model's inability to guess a never-seen location's
+baseline height.**
+
+This is why *more sites* is the specific lever. The level is a per-location
+property the model learns from the between-station spread in the training set
+("sandy + low-rainfall + this SMIPS climatology → baseline ≈22 %"). With only 30
+stations there are too few distinct (soil, climate, terrain) combinations to
+learn that mapping, so a new site's level is guessed poorly. Adding stations does
+not help the dynamics (already good) — it directly enriches the *level* model.
+The 0.83 is an upper bound (real added sites give an imperfect level model, so
+the realistic gain lies between 0.35 and 0.83), but it proves the headroom exists
+and names the single component that unlocks it.
+
+### Leave-region-out check
+
+Because the winning configuration was selected on the same 30-station LOSO, it
+was re-validated under leave-region-out (train two catchments, predict the
+third — a split never used for selection): model1 −0.72 → model4 **+0.12**, with
+every regional bias smaller (Kyeamba +0.45; Yanco bias +9.2 → +6.1; Adelong
+−10.4 → −7.3). The gains generalise; the level problem under full-region transfer
+is reduced but not solved.
 
 ## Limitations
 
