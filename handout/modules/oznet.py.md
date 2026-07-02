@@ -1,5 +1,9 @@
 # `oznet.py`: OzNet in-situ ground truth (Stage 1)
 
+<!-- NAV -->
+[Index](../README.md) · [Study areas →](queries.py.md)
+<!-- /NAV -->
+
 Source: [`../../emt/insitu/oznet.py`](../../emt/insitu/oznet.py)
 
 Retrieves and processes the OzNet Murrumbidgee in-situ soil-moisture archive to
@@ -38,3 +42,10 @@ reduces them to a daily root-zone series.
 Long format, one record per station-day:
 `[site, station, time, sm_rootzone_pct, n_layers]` (volumetric %). Consumed by
 [`features.py`](features.py.md) as the `sm_rootzone_pct` target.
+
+---
+
+---
+<!-- NAV -->
+[Index](../README.md) · [Study areas →](queries.py.md)
+<!-- /NAV -->

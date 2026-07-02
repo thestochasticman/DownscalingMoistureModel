@@ -1,5 +1,9 @@
 # `features.py`: training-table assembly (Stage 4)
 
+<!-- NAV -->
+[← Soil covariates (SLGA)](slga.py.md) · [Index](../README.md) · [Evaluation (leave-site-out) →](evaluation.py.md)
+<!-- /NAV -->
+
 Source: [`../../emt/features.py`](../../emt/features.py)
 
 Assembles the training table. For each OzNet station-day it joins the coarse
@@ -41,3 +45,10 @@ maximum absolute difference 0.000 mm).
 
 Long-format table, one record per station-day, consumed by
 [`model1`](model1.md).
+
+---
+
+---
+<!-- NAV -->
+[← Soil covariates (SLGA)](slga.py.md) · [Index](../README.md) · [Evaluation (leave-site-out) →](evaluation.py.md)
+<!-- /NAV -->

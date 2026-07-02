@@ -1,5 +1,9 @@
 # `smips.py`: SMIPS coarse predictor (≈1 km)
 
+<!-- NAV -->
+[← Study areas](queries.py.md) · [Index](../README.md) · [Terrain covariates →](covariates.py.md)
+<!-- /NAV -->
+
 Source: [`../../emt/smips.py`](../../emt/smips.py)
 
 Retrieves the SMIPS `TotalBucket` profile soil-water field (mm, ≈1 km, daily)
@@ -40,3 +44,10 @@ This alignment makes the cluster-fetch retrieval in
 (verified: maximum absolute difference 0.000 mm). SMIPS cached before this change
 used window-dependent values; downstream products were rebuilt after clearing the
 cache.
+
+---
+
+---
+<!-- NAV -->
+[← Study areas](queries.py.md) · [Index](../README.md) · [Terrain covariates →](covariates.py.md)
+<!-- /NAV -->

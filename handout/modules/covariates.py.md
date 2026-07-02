@@ -1,5 +1,9 @@
 # `covariates.py`: terrain predictors (30 m)
 
+<!-- NAV -->
+[← SMIPS coarse predictor](smips.py.md) · [Index](../README.md) · [Soil covariates (SLGA) →](slga.py.md)
+<!-- /NAV -->
+
 Source: [`../../emt/covariates.py`](../../emt/covariates.py)
 
 Derives the 30 m terrain covariates that supply sub-grid structure to the model,
@@ -31,3 +35,10 @@ the DEM's valid footprint, eroded by one pixel.
 
 The covariates are static per station (sampled once and broadcast across days)
 and are joined into the training table in [`features.py`](features.py.md).
+
+---
+
+---
+<!-- NAV -->
+[← SMIPS coarse predictor](smips.py.md) · [Index](../README.md) · [Soil covariates (SLGA) →](slga.py.md)
+<!-- /NAV -->

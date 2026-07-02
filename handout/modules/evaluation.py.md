@@ -1,5 +1,9 @@
 # `evaluation.py`: metrics and leave-site-out cross-validation
 
+<!-- NAV -->
+[← Training table](features.py.md) · [Index](../README.md) · [model1 · Random Forest →](model1.md)
+<!-- /NAV -->
+
 Source: [`../../emt/evaluation.py`](../../emt/evaluation.py)
 
 The shared scoring harness. It is estimator-agnostic: a model package
@@ -104,3 +108,10 @@ transfer** (predicting a new location), not temporal extrapolation (predicting a
 future date). The leave-region-out downscaling demonstration
 ([`downscale.py`](downscale.py.md)) is the same idea at coarser granularity — a
 whole catchment is withheld instead of one station.
+
+---
+
+---
+<!-- NAV -->
+[← Training table](features.py.md) · [Index](../README.md) · [model1 · Random Forest →](model1.md)
+<!-- /NAV -->

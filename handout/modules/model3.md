@@ -1,5 +1,9 @@
 # `model3`: gradient-boosted trees on SMIPS + terrain
 
+<!-- NAV -->
+[← model2 · Linear](model2.md) · [Index](../README.md) · [model4 · Climatology + soil →](model4.md)
+<!-- /NAV -->
+
 Source: [`../../emt/model3/model.py`](../../emt/model3/model.py)
 
 Same target and features as [`model1`](model1.md) and [`model2`](model2.md), but
@@ -74,3 +78,10 @@ by a feature (the SMIPS pixel climatology) plus much heavier regularisation of
 this same estimator family. [`model4`](model4.md) is that configuration
 (pooled NSE +0.35); `model3` is retained as the stock-defaults boosting
 reference point. See [Model comparison](../README.md#model-comparison).
+
+---
+
+---
+<!-- NAV -->
+[← model2 · Linear](model2.md) · [Index](../README.md) · [model4 · Climatology + soil →](model4.md)
+<!-- /NAV -->

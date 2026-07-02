@@ -8,34 +8,62 @@ downscaling the TERN SMIPS `TotalBucket` profile soil-water product (mm,
 learn how fine-scale terrain redistributes moisture within each ≈1 km SMIPS
 cell; the model is then applied at the 30 m resolution of the Copernicus DEM.
 
-This document describes the processing pipeline, two data-quality issues
-identified and resolved during development, and the cross-validation and
-spatial-transfer results obtained to date. Each pipeline component has a
-corresponding note under [`modules/`](modules/); all figures are reproducible
-(see [Reproducibility](#reproducibility)).
+This page is both the **index** and the **results synthesis**. Every pipeline
+component and every model has its own page under [`modules/`](modules/), and the
+pages are chained with prev/next links so the handout can also be read straight
+through, in the order the work actually happened. **Start here →
+[Ground truth (OzNet)](modules/oznet.py.md).**
 
-## Pipeline
+## Contents
 
-| Stage | Module | Output |
+The story runs in three acts: build the dataset, evaluate and improve the model,
+then apply it. Each item links to a self-contained page.
+
+**1 · Building the dataset** — assemble one table of predictors + target.
+
+| # | Page | What it contributes |
 |---|---|---|
-| 1. Ground truth | [`oznet.py`](modules/oznet.py.md) | Daily root-zone (0–90 cm) soil moisture per OzNet station (the regression target) |
-| 2. Study areas | [`queries.py`](modules/queries.py.md) | PaddockTS `Query` extents (per-station windows and focus catchments) |
-| 3a. Coarse predictor | [`smips.py`](modules/smips.py.md) | SMIPS `TotalBucket` field (mm), the quantity being downscaled |
-| 3b. Fine predictors | [`covariates.py`](modules/covariates.py.md) | 30 m terrain covariates (elevation, slope, northness/eastness, TWI, HLI, flow accumulation) |
-| 4. Feature assembly | [`features.py`](modules/features.py.md) | Training table: one record per station-day (target, SMIPS, terrain, seasonality) |
-| 5. Model | [`model1`](modules/model1.md) · [`model2`](modules/model2.md) · [`model3`](modules/model3.md) · [`model4`](modules/model4.md) | Random Forest (baseline), a linear comparison, gradient boosting, and the improved climatology+soil model; shared scoring and cross-validation in [`evaluation.py`](modules/evaluation.py.md) |
-| 6. Downscaling | [`downscale.py`](modules/downscale.py.md) | Per-pixel application of the model to produce a 30 m field |
+| 1 | [Ground truth — OzNet in-situ](modules/oznet.py.md) | Daily root-zone (0–90 cm) soil moisture per station — the target |
+| 2 | [Study areas](modules/queries.py.md) | PaddockTS `Query` extents (per-station windows, focus catchments) |
+| 3 | [SMIPS coarse predictor](modules/smips.py.md) | The ≈1 km `TotalBucket` field (mm) being downscaled |
+| 4 | [Terrain covariates](modules/covariates.py.md) | 30 m DEM derivatives (slope, aspect, TWI, HLI, accumulation) |
+| 5 | [Soil covariates (SLGA)](modules/slga.py.md) | Root-zone clay/sand/AWC/bulk-density (used from model4 on) |
+| 6 | [Training table](modules/features.py.md) | One row per station-day: target + all predictors |
 
-## The model
+**2 · Evaluating and modelling** — how skill is measured, and five models.
 
-The downscaling model is a **Random Forest regressor**: an ensemble of decision
-trees, each fit to a bootstrap sample of the training rows, whose predictions are
-averaged. It learns a nonlinear relationship between the coarse SMIPS value and
-the fine terrain covariates without a prescribed functional form, and it yields
-feature importances. One structural property is relevant to the results: because
-each tree's prediction is an average of training samples, the model cannot
-extrapolate beyond the training range and tends to shrink predictions toward the
-mean (quantified in [Per-station performance](#per-station-performance)).
+| # | Page | Role |
+|---|---|---|
+| 7 | [Evaluation](modules/evaluation.py.md) | Leave-site-out cross-validation and the metrics |
+| 8 | [model1 · Random Forest](modules/model1.md) | Baseline (pooled NSE +0.15) |
+| 9 | [model2 · Linear](modules/model2.md) | Interpretable comparison |
+| 10 | [model3 · Gradient boosting](modules/model3.md) | Stock-boosting reference |
+| 11 | [model4 · Climatology + soil](modules/model4.md) | **Recommended** (pooled NSE +0.35) |
+| 12 | [model5 · Soil smoothing](modules/model5.md) | A documented tradeoff, not recommended |
+
+**3 · Applying the model**
+
+| # | Page | Output |
+|---|---|---|
+| 13 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
+
+The remainder of this page synthesises the results across those pages, in the
+same order: we start with the raw relationship SMIPS offers, watch it fail on a
+single cluster, expand the training set, diagnose the residual as a *level* bias,
+and then close most of that gap with model4.
+
+## The modelling approach
+
+Every model here is a regression from the coarse predictor and fine covariates to
+the in-situ target — they differ only in the estimator and feature set, and are
+scored by the identical [leave-site-out harness](modules/evaluation.py.md). The
+baseline ([`model1`](modules/model1.md)) is a **Random Forest**; the recommended
+model ([`model4`](modules/model4.md)) is regularised gradient boosting with added
+climatology and soil features. The narrative below builds from the first to the
+last. One structural property of the tree models recurs in the results: because a
+tree leaf predicts an average of training samples, they cannot extrapolate beyond
+the training range and shrink predictions toward the mean (quantified in
+[Per-station performance](#per-station-performance)).
 
 - **Target (`y`):** OzNet root-zone soil moisture (%).
 - **Features (`X`):** the coarse `smips_totalbucket` (mm); seven 30 m terrain
@@ -67,10 +95,10 @@ identity; `station` is retained only as the grouping variable for spatial
 cross-validation. The same fitted model is used two ways: evaluated by
 leave-site-out cross-validation, and applied to every 30 m pixel of an area to
 produce the downscaled field. Reported skill is always the held-out estimate,
-never an in-sample fit. Configuration (`build_estimator`): 300 trees, minimum 3
-samples per leaf; see [`model1`](modules/model1.md). An alternative linear model
-([`model2`](modules/model2.md)) is compared in
-[Model comparison](#model-comparison).
+never an in-sample fit. The table above shows the *baseline* feature set (model1);
+model4 adds SMIPS-climatology and soil columns (see
+[The improvement search](#the-improvement-search-model4)). All five estimators are
+laid out in [Model comparison](#model-comparison).
 
 ```mermaid
 flowchart TD
@@ -84,16 +112,16 @@ flowchart TD
     DOY --> TBL
     OZ --> TBL
 
-    TBL -->|"features X + target y"| RF["Random Forest<br/>regressor"]
+    TBL -->|"features X + target y"| RF["Regression estimator<br/>(model1 … model4)"]
 
     RF --> CV["Leave-site-out CV<br/>skill: NSE, ubRMSE, r"]
     RF --> APP["Apply per 30 m pixel<br/>SMIPS + terrain + day"]
     APP --> OUT["30 m soil-moisture field"]
 ```
 
-The predictors and the in-situ target are assembled into one table; the Random
-Forest is fit on it, then either cross-validated or applied pixel-by-pixel to
-produce the 30 m map.
+The predictors and the in-situ target are assembled into one table; an estimator
+is fit on it, then either cross-validated or applied pixel-by-pixel to produce the
+30 m map.
 
 ## Evaluation
 

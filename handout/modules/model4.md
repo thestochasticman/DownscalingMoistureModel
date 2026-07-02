@@ -1,5 +1,9 @@
 # `model4`: regularised boosting + SMIPS climatology + soil (the improved model)
 
+<!-- NAV -->
+[← model3 · Gradient boosting](model3.md) · [Index](../README.md) · [model5 · Soil smoothing →](model5.md)
+<!-- /NAV -->
+
 Source: [`../../emt/model4/model.py`](../../emt/model4/model.py)
 
 The product of a systematic improvement search (2026-07-02) over features,
@@ -99,3 +103,10 @@ detail. The full-record leave-region-out numbers (Yanco NSE −1.81 → −0.44)
 remain the meaningful transfer measure; see the
 [README](../README.md#the-same-demonstration-with-model4) for the figure and
 the calibration-vs-texture tradeoff.
+
+---
+
+---
+<!-- NAV -->
+[← model3 · Gradient boosting](model3.md) · [Index](../README.md) · [model5 · Soil smoothing →](model5.md)
+<!-- /NAV -->

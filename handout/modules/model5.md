@@ -1,5 +1,9 @@
 # `model5`: model4 with smoothed soil (a documented tradeoff, not an improvement)
 
+<!-- NAV -->
+[← model4 · Climatology + soil](model4.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+<!-- /NAV -->
+
 Source: [`../../emt/model5/model.py`](../../emt/model5/model.py)
 
 Identical estimator and features to [`model4`](model4.md); the only change is that
@@ -58,3 +62,10 @@ LOSO drop is an upper bound — but the direction is robust and expected.)
 texture-vs-skill tension and, at most, to produce a presentation-quality map where
 lower per-station skill is acceptable. See the
 [README](../README.md#soil-smoothing-experiment-model5-negative-result).
+
+---
+
+---
+<!-- NAV -->
+[← model4 · Climatology + soil](model4.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+<!-- /NAV -->

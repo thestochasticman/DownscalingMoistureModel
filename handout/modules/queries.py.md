@@ -1,5 +1,9 @@
 # `queries.py`: study-area definitions
 
+<!-- NAV -->
+[← Ground truth (OzNet)](oznet.py.md) · [Index](../README.md) · [SMIPS coarse predictor →](smips.py.md)
+<!-- /NAV -->
+
 Source: [`../../emt/queries.py`](../../emt/queries.py)
 
 Constructs PaddockTS [`Query`](../../emt/queries.py) objects. A `Query` carries a
@@ -26,3 +30,10 @@ caching scheme.
 
 Queries are consumed by [`smips.py`](smips.py.md) and
 [`covariates.py`](covariates.py.md).
+
+---
+
+---
+<!-- NAV -->
+[← Ground truth (OzNet)](oznet.py.md) · [Index](../README.md) · [SMIPS coarse predictor →](smips.py.md)
+<!-- /NAV -->

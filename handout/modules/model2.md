@@ -1,5 +1,9 @@
 # `model2`: linear regression on SMIPS + terrain
 
+<!-- NAV -->
+[← model1 · Random Forest](model1.md) · [Index](../README.md) · [model3 · Gradient boosting →](model3.md)
+<!-- /NAV -->
+
 Source: [`../../emt/model2/model.py`](../../emt/model2/model.py)
 
 Same target and features as [`model1`](model1.md), but the estimator is a linear
@@ -44,3 +48,10 @@ of cross-site skill; and full pairwise/quadratic features **exploded** under
 leave-site-out (NSE ~ −36000), because polynomial terms extrapolate violently to
 unseen feature combinations. The plain ridge is therefore the robust, correct
 linear configuration.
+
+---
+
+---
+<!-- NAV -->
+[← model1 · Random Forest](model1.md) · [Index](../README.md) · [model3 · Gradient boosting →](model3.md)
+<!-- /NAV -->

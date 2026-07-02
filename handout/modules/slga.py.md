@@ -1,5 +1,9 @@
 # `slga.py`: soil covariates (SLGA, ~90 m)
 
+<!-- NAV -->
+[← Terrain covariates](covariates.py.md) · [Index](../README.md) · [Training table →](features.py.md)
+<!-- /NAV -->
+
 Source: [`../../emt/slga.py`](../../emt/slga.py)
 
 Loads static soil covariates from the Soil and Landscape Grid of Australia
@@ -39,3 +43,10 @@ The covariates are static per location and would be sampled at each station and
 reprojected per pixel for downscaling. That integration was implemented, tested,
 and reverted (the experiment above); the loader remains callable on its own for
 re-evaluation when more sites are available.
+
+---
+
+---
+<!-- NAV -->
+[← Terrain covariates](covariates.py.md) · [Index](../README.md) · [Training table →](features.py.md)
+<!-- /NAV -->

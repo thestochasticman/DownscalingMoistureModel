@@ -1,5 +1,9 @@
 # `model1`: Random Forest regressor (the baseline model)
 
+<!-- NAV -->
+[← Evaluation (leave-site-out)](evaluation.py.md) · [Index](../README.md) · [model2 · Linear →](model2.md)
+<!-- /NAV -->
+
 Source: [`../../emt/model1/model.py`](../../emt/model1/model.py)
 
 A Random Forest predicts the in-situ root-zone target from the coarse SMIPS
@@ -47,3 +51,10 @@ increases SMIPS importance to 0.34. It was the best-performing model until the
 climatology + soil feature work produced [`model4`](model4.md), which supersedes
 it on every metric (see [Model comparison](../README.md#model-comparison));
 `model1` is retained as the baseline the improvement is measured against.
+
+---
+
+---
+<!-- NAV -->
+[← Evaluation (leave-site-out)](evaluation.py.md) · [Index](../README.md) · [model2 · Linear →](model2.md)
+<!-- /NAV -->
