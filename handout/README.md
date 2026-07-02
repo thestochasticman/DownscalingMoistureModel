@@ -329,6 +329,35 @@ SMIPS and terrain do not encode the local soil and climate properties that set
 the absolute moisture level. See [Limitations](#limitations) and
 [Future work](#future-work).
 
+### The same demonstration with model4
+
+Rerunning the identical protocol with [`model4`](modules/model4.md)
+([`plot_downscale_model4.py`](plot_downscale_model4.py); the AOI's SMIPS
+climatology and SLGA soil rasters are supplied via ``downscale(...,
+extra_layers=...)``):
+
+![30 m downscaling over Yanco, model4](figures/downscale_yanco_model4.png)
+
+| Metric (single date, 12 stations) | model1 | model4 |
+|---|---|---|
+| RMSE | 11.5 % | **10.3 %** |
+| Bias | +11.3 % | **+9.0 %** |
+| ubRMSE | **2.4 %** | 4.9 % |
+| r | **0.41** | 0.30 |
+
+A mixed, instructive result. The regional *level* improves (bias −2.3 points),
+consistent with the leave-region-out evaluation over the full record (Yanco NSE
+−1.81 → −0.44, bias +9.2 → +6.1). But the *single-day spatial pattern* is worse:
+the model4 field visibly inherits blocky SLGA map-unit boundaries (panel b) and
+mutes the dendritic terrain detail of the model1 map, because the added static
+features (climatology, soil) now carry weight that terrain carried alone in
+model1. One station (Y3) is thrown low by a soil boundary. Two readings follow:
+first, the single-date snapshot remains a poor summary of skill (the full-record
+leave-region-out is the meaningful transfer number); second, the soil covariate
+buys per-station calibration at some cost in fine-scale spatial texture — a
+tradeoff to revisit when more sites allow soil's weight to be estimated more
+robustly (or with smoothed soil rasters).
+
 ## Metrics
 
 | Metric | Definition |
@@ -486,6 +515,32 @@ Ideas tested that did **not** survive: SILO climate dynamics (+0.02 alone, ~0
 with soil), SMIPS temporal lags, aridity statics, equal-station weighting,
 two-stage decomposition, RF+HGB ensembling (pooled tie, worse per-station).
 
+The same leave-site-out diagnostics shown for model1 earlier, recomputed for
+model4:
+
+![model4 leave-site-out results](figures/model4_results.png)
+
+- **(a)** Leave-site-out fit: pooled r 0.62, NSE +0.35 (model1: 0.53 / +0.15).
+- **(b)** Permutation feature importance, with the new feature groups coloured.
+  `smips_totalbucket` stays the top predictor, but `soil_sand` and the SMIPS
+  climatology terms (`smips_std_px`, `smips_mean_px`) are the 2nd–4th — the
+  added level information the earlier models lacked.
+- **(c)** Per-station NSE, model1 → model4 (grey → coloured): 25 of 30 stations
+  improve, the count positive rises 7 → 14, and the median moves from −0.61 to
+  −0.07. This is the panel that shows the tradeoff breaking — the gains are
+  broad, not a few sites traded for others.
+- **(d)** Residual per-station bias shrinks at most stations (mean |bias|
+  5.0 % → 4.6 %), though a few sites (e.g. K2) worsen.
+
+The per-station held-out time series (the temporal view, as shown for model1)
+for all 30 stations:
+
+![model4 per-station time series](figures/model4_per_station.png)
+
+Prediction (colour) against observation (black); each title gives that station's
+r and NSE. Dynamics track well throughout (median per-station r 0.80); the
+remaining misses are level offsets (e.g. K12, K13 — parallel but shifted).
+
 Two results frame what remains:
 
 - **Oracle ceiling.** Giving the model each station's *true* mean level (keeping
@@ -510,11 +565,13 @@ Two results frame what remains:
   binding constraint: the oracle diagnostic (NSE 0.83 with true station means)
   shows the remaining gap is almost entirely the site-level baseline, which more
   sites would constrain directly.
-- **Single-date downscaling demonstration.** Stage 6 is evaluated on one date;
-  multi-date and seasonal evaluation remains outstanding (Stage 7). The
-  downscaling figures also predate model4 (they show model1); model4 inference
-  additionally needs the SMIPS-climatology and soil rasters over the AOI
-  (supported via `downscale(..., extra_layers=...)`, not yet demonstrated).
+- **Single-date downscaling demonstration.** Stage 6 is evaluated on one date
+  (for both model1 and model4); multi-date and seasonal evaluation remains
+  outstanding (Stage 7).
+- **Soil texture in the model4 map.** The model4 30 m field inherits blocky
+  SLGA map-unit boundaries and mutes some fine terrain detail relative to the
+  model1 map (see the model4 demonstration) — a per-station-calibration vs
+  spatial-texture tradeoff to revisit with more sites or smoothed soil inputs.
 
 ## Future work
 
@@ -527,9 +584,11 @@ Two results frame what remains:
 2. **Bias correction.** A per-site offset or quantile mapping to SMIPS
    climatology would address the residual regional level bias (±6–7 % under
    leave-region-out for model4).
-3. **model4 downscaling demonstration.** Regenerate the Stage 6 Yanco transfer
-   demo with model4 (climatology + soil rasters via `extra_layers`) and compare
-   against the model1 figures; then the multi-date Stage 7 evaluation.
+3. **Multi-date evaluation (Stage 7).** The model4 Yanco demonstration (above)
+   is done for one date; a multi-date, multi-season leave-region-out evaluation
+   of the 30 m fields would give transfer numbers that do not hinge on a single
+   snapshot, and would show whether the soil-boundary texture cost varies with
+   wetness state.
 4. **Mass conservation.** Constrain the 30 m field to aggregate to a coarse
    reference within each cell (decomposition into cell mean plus terrain anomaly,
    with the mean rebased onto the reference). Requires a coarse reference in the
@@ -547,7 +606,9 @@ PYTHONPATH=. python handout/plot_results.py         # smips_correction, leave_si
 PYTHONPATH=. python handout/plot_catchment.py       # catchment_results
 PYTHONPATH=. python handout/plot_per_station.py     # catchment_per_station, kyeamba_per_station
 PYTHONPATH=. python handout/plot_shrinkage.py       # shrinkage_diagnostic
-PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field)
+PYTHONPATH=. python handout/plot_model4_results.py  # model4_results, model4_per_station
+PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)
+PYTHONPATH=. python handout/plot_downscale_model4.py # downscale_yanco_model4
 ```
 
 `plot_results.py` rebuilds the Kyeamba June–July 2020 table, reconstructs the

@@ -17,6 +17,12 @@ were stuck on.
 | Median per-station r | 0.75 | 0.80 |
 | Leave-region-out NSE | −0.72 | **+0.12** |
 
+The leave-site-out fit, feature importance, the paired model1 → model4
+per-station NSE/bias comparison, and the 30-station held-out time series are
+plotted by [`plot_model4_results.py`](../plot_model4_results.py)
+(`figures/model4_results.png`, `figures/model4_per_station.png`) — see the
+[README](../README.md#the-improvement-search-model4).
+
 | Function | Role |
 |---|---|
 | `build_estimator(**kw)` | `HistGradientBoostingRegressor(max_leaf_nodes=3, learning_rate=0.03, max_iter=800, l2=1)` |
@@ -83,3 +89,13 @@ rasters passed via `extra_layers`: the SMIPS climatology over the AOI
 cached) and the SLGA soil stack ([`slga.soil_covariates`](slga.py.md)).
 `smips_anom`/`smips_z` are derived per pixel inside `downscale` from the day's
 SMIPS and the climatology.
+
+Demonstrated end-to-end by
+[`plot_downscale_model4.py`](../plot_downscale_model4.py) (leave-Yanco-out,
+2008-07-31): regional bias improves over model1 (+11.3 → +9.0 %, RMSE 11.5 →
+10.3 %) but the single-day spatial pattern is worse (ubRMSE 2.4 → 4.9 %) — the
+30 m field inherits blocky SLGA map-unit boundaries and mutes some terrain
+detail. The full-record leave-region-out numbers (Yanco NSE −1.81 → −0.44)
+remain the meaningful transfer measure; see the
+[README](../README.md#the-same-demonstration-with-model4) for the figure and
+the calibration-vs-texture tradeoff.
