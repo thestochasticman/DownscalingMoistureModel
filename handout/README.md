@@ -461,6 +461,7 @@ directly. Results to date:
 | [model3](modules/model3.md) | Gradient boosting (HistGB, stock) | +0.12, 0.47 | 8/30 |
 | [model2](modules/model2.md) | Linear (Ridge, scaled) | +0.02, 0.36 | 12/30 |
 | Huber (robust linear) | tested only | −0.02, 0.34 | 15/30 |
+| [model5](modules/model5.md) | model4 + smoothed soil (tradeoff, not recommended) | +0.13, 0.50 | 12/30 |
 
 Among models 1–3 the results traced a **cross-site ↔ per-station tradeoff**:
 every configuration that put more stations at positive per-station NSE gave up
@@ -597,6 +598,32 @@ every regional bias smaller (Kyeamba +0.45; Yanco bias +9.2 → +6.1; Adelong
 −10.4 → −7.3). The gains generalise; the level problem under full-region transfer
 is reduced but not solved.
 
+## Soil smoothing experiment (model5, negative result)
+
+The model4 downscaled field inherits blocky SLGA soil map-unit boundaries (see
+[the model4 demonstration](#the-same-demonstration-with-model4)). A natural fix is
+to Gaussian-blur the soil rasters; [`model5`](modules/model5.md) does this at both
+training and inference. It cleans the map — Yanco demo ubRMSE 4.90 → 3.05 %,
+r 0.30 → 0.39 — but a controlled blur sweep (σ=0 exactly reproduces model4)
+shows leave-site-out skill falls monotonically, with no sweet spot:
+
+| soil blur σ (px) | LOSO NSE | r | per-station NSE > 0 |
+|---|---|---|---|
+| **0 (= model4)** | **0.354** | 0.623 | 14/30 |
+| 1 | 0.286 | 0.613 | 13/30 |
+| 2 | 0.126 | 0.501 | 12/30 |
+| 3 | 0.058 | 0.455 | 14/30 |
+
+The reason is that soil is the **2nd most important predictor**: the sharp
+per-station soil detail that makes the map blocky is the *same* signal that tells
+the model how wet each station is relative to the others. Smoothing removes it
+from both at once — the map artifacts and the tabular skill are two faces of one
+signal and cannot be separated by a blur. This is the same lesson as the
+[temporal-smoothing test](#the-improvement-search-model4) (which was also flat)
+and the [oracle](#the-oracle-ceiling-how-much-is-left-and-where): the binding
+constraint is the site-level information content, not preprocessing. model4
+remains the recommended model.
+
 ## Limitations
 
 - **Residual level bias on transfer.** The principal residual error remains a
@@ -652,6 +679,7 @@ PYTHONPATH=. python handout/plot_shrinkage.py       # shrinkage_diagnostic
 PYTHONPATH=. python handout/plot_model4_results.py  # model4_results, model4_per_station
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)
 PYTHONPATH=. python handout/plot_downscale_model4.py # downscale_yanco_model4
+PYTHONPATH=. python handout/plot_downscale_model5.py # downscale_yanco_model5 (soil-smoothing tradeoff)
 ```
 
 `plot_results.py` rebuilds the Kyeamba June–July 2020 table, reconstructs the

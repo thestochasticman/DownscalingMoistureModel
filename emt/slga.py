@@ -115,6 +115,31 @@ def soil_covariates(query: Query, reload: bool = False) -> xr.Dataset:
     return out
 
 
+def smooth_soil(ds: xr.Dataset, sigma_px: float = 2.0) -> xr.Dataset:
+    """NaN-aware Gaussian blur of the soil covariates (used by model5).
+
+    SLGA is a categorical-ish product: adjacent map units meet at hard edges, so
+    a downscaled field that uses it verbatim inherits blocky boundaries (see the
+    model4 demonstration). A modest spatial blur softens those seams while
+    preserving the raster's valid footprint. ``sigma_px`` is in pixels of the
+    dataset's own grid (SLGA native ~90 m). A no-op if ``sigma_px <= 0``.
+    """
+    if sigma_px <= 0:
+        return ds
+    from scipy.ndimage import gaussian_filter
+    out = ds.copy()
+    for v in SOIL_VARS:
+        a = ds[v].values.astype("float64")
+        mask = np.isfinite(a)
+        num = gaussian_filter(np.where(mask, a, 0.0), sigma_px)
+        den = gaussian_filter(mask.astype("float64"), sigma_px)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            res = num / den
+        res[~mask] = np.nan          # keep the original valid footprint
+        out[v] = (ds[v].dims, res)
+    return out
+
+
 def test():
     from datetime import date
     q = Query.from_lat_lon(-35.38978, 147.45720, 2.0, date(2020, 1, 1), date(2020, 1, 2),
