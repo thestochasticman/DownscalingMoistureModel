@@ -70,6 +70,75 @@ def _station_silo(stn: str, lat: float, lon: float,
         return None
 
 
+def antecedent_grid(query, start: date, end: date, step_deg: float = 0.05,
+                    reload: bool = False, verbose: bool = True) -> "object":
+    """Gridded antecedent-meteorology cube over ``query.bbox`` (for inference).
+
+    Samples SILO on a regular ``step_deg`` grid over the AOI using the fast
+    point path (:func:`download_silo`, one cell per point, cached), computes the
+    trailing-window features per cell, and assembles an ``xr.Dataset``
+    (``time, y, x``, EPSG:4326) with ``ANTECEDENT_VARS``. ``step_deg`` defaults
+    to SILO's native 0.05°. Cached to NetCDF.
+
+    (The open gridded NetCDFs are chunked by time, so byte-range subsetting a
+    small bbox would pull whole daily continent grids — the point path is far
+    cheaper for an AOI. A true national run would read the grids locally.)
+
+    Use :func:`antecedent_day_layers` to pull one day's fields for
+    :func:`emt.downscale.downscale`.
+    """
+    import numpy as np
+    import xarray as xr
+    import rioxarray  # noqa: F401  (registers the .rio accessor)
+    from os import makedirs
+    from os.path import exists
+
+    fn = f"{query.tmp_dir}/Environmental/{query.stub}_antecedent_grid.nc"
+    if not reload and exists(fn):
+        if verbose:
+            print(f"  cached: {fn}", flush=True)
+        with xr.open_dataset(fn) as ds:
+            return ds.load()
+
+    minx, miny, maxx, maxy = query.bbox
+    lons = np.round(np.arange(minx, maxx + step_deg / 2, step_deg), 4)
+    lats = np.round(np.arange(miny, maxy + step_deg / 2, step_deg), 4)
+    if verbose:
+        print(f"  SILO point-grid {len(lats)}x{len(lons)} "
+              f"({len(lats)*len(lons)} cells) @ {step_deg}deg", flush=True)
+
+    times = pd.date_range(start, end, freq="D")
+    grids = {v: np.full((len(times), len(lats), len(lons)), np.nan) for v in ANTECEDENT_VARS}
+    for iy, lat in enumerate(lats):
+        for ix, lon in enumerate(lons):
+            silo = _station_silo(f"grid_{lat:.3f}_{lon:.3f}".replace("-", "m").replace(".", "p"),
+                                 float(lat), float(lon), start, end)
+            if silo is None:
+                continue
+            tr = _trailing(silo).set_index("time").reindex(times)
+            for v in ANTECEDENT_VARS:
+                grids[v][:, iy, ix] = tr[v].values
+        if verbose:
+            print(f"    row {iy+1}/{len(lats)}", flush=True)
+
+    ante = xr.Dataset(
+        {v: (("time", "y", "x"), grids[v]) for v in ANTECEDENT_VARS},
+        coords={"time": times, "y": lats, "x": lons},
+    ).rio.write_crs(4326)
+    makedirs(f"{query.tmp_dir}/Environmental", exist_ok=True)
+    ante.to_netcdf(fn)
+    if verbose:
+        print(f"  saved: {fn}", flush=True)
+    return ante
+
+
+def antecedent_day_layers(cube: "object", day) -> dict:
+    """One day's antecedent fields as ``{var: DataArray}`` for ``extra_layers``."""
+    import pandas as _pd
+    sl = cube.sel(time=_pd.Timestamp(day), method="nearest")
+    return {v: sl[v] for v in ANTECEDENT_VARS}
+
+
 def add_antecedent(table: pd.DataFrame, coords: pd.DataFrame,
                    start: date, end: date, verbose: bool = True) -> pd.DataFrame:
     """Attach ``ANTECEDENT_VARS`` to ``table`` (one row per station-day)."""

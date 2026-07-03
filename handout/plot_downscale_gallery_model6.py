@@ -1,11 +1,9 @@
 """Gallery of generated 30 m soil moisture from model6 (the recommended model).
 
 model6 adds antecedent-meteorology features. For a downscaled map these are
-needed per pixel, but SILO is a ~5 km grid and the focus AOI is ~35 km across,
-so the trailing-window features are taken at the AOI centre and applied
-uniformly over the field (a small-AOI approximation; a national product would
-use gridded SILO). The spatial structure still comes from terrain, soil and
-SMIPS climatology; the antecedent features set the per-date level.
+supplied per pixel from *gridded* SILO (the open AWS archive, subset to the AOI
+and reprojected onto the 30 m grid), so the trailing-window features vary
+spatially at SILO's ~5 km resolution rather than being a single AOI-centre value.
 
 Run from repo root::  PYTHONPATH=. python handout/plot_downscale_gallery_model6.py
 """
@@ -24,7 +22,7 @@ from emt.queries import query_for_focus_area, query_for_station
 from emt.downscale import downscale
 from emt.smips import smips_climatology
 from emt.slga import soil_covariates, SOIL_VARS
-from emt.antecedent import _trailing, _station_silo, ANTECEDENT_VARS
+from emt.antecedent import antecedent_grid, antecedent_day_layers
 from emt.model6.model import build_estimator, ensure_features, FEATURES, TARGET
 
 REPO = Path(__file__).resolve().parent.parent
@@ -50,19 +48,16 @@ static = {"smips_mean_px": clim["smips_mean_px"], "smips_std_px": clim["smips_st
           **{v: soil[v] for v in SOIL_VARS}}
 stamp("AOI climatology + soil")
 
-# --- antecedent meteorology at the AOI centre (trailing windows, per date) ---
-minx, miny, maxx, maxy = q_clim.bbox
-clat, clon = (miny + maxy) / 2, (minx + maxx) / 2
-silo = _station_silo(f"{AOI}_ctr", clat, clon, date(2006, 1, 1), date(2010, 12, 31))
-ante = _trailing(silo).set_index("time")
-stamp(f"antecedent series at AOI centre ({clat:.2f}, {clon:.2f})")
+# --- gridded antecedent meteorology over the AOI (SILO S3, per pixel) ---
+ante_cube = antecedent_grid(q_clim, date(2006, 1, 1), date(2010, 12, 31))
+stamp(f"gridded antecedent cube {dict(ante_cube.sizes)}")
 
 # --- downscale each date ---
 fields = []
 for d in DATES:
-    ante_d = {v: float(ante.loc[pd.Timestamp(d), v]) for v in ANTECEDENT_VARS}
+    ante_layers = antecedent_day_layers(ante_cube, d)
     ds = downscale(model, query_for_focus_area(AOI, d, d), d, FEATURES,
-                   extra_layers={**static, **ante_d})
+                   extra_layers={**static, **ante_layers})
     fields.append((d, ds["sm_pred"]))
     stamp(f"downscaled {d}  (mean {float(ds['sm_pred'].mean()):.1f}%)")
 
@@ -87,6 +82,6 @@ fig.subplots_adjust(right=0.9)
 cax = fig.add_axes([0.92, 0.15, 0.015, 0.7])
 fig.colorbar(im, cax=cax, label="root-zone soil moisture (%)")
 fig.suptitle(f"Generated 30 m soil moisture over {AOI.title()}, 2008 "
-             f"(model6; antecedent meteorology at AOI centre)", fontsize=14, y=0.98)
+             f"(model6; gridded antecedent meteorology)", fontsize=14, y=0.98)
 fig.savefig(FIG, dpi=125, bbox_inches="tight")
 stamp(f"wrote {FIG.relative_to(REPO)}")

@@ -366,9 +366,10 @@ produces the same field with the antecedent-meteorology correction applied:
 It is visually near-identical to the model4 gallery — as expected, since the
 antecedent features mainly correct the per-station *level* (the metric gain is in
 bias, not spatial texture, which still comes from terrain, soil and SMIPS
-climatology). One caveat for this map: SILO is a ≈5 km grid, so the trailing-window
-features are evaluated at the AOI centre and applied uniformly over the ≈35 km
-field (a small-AOI approximation; a national product would use gridded SILO). This
+climatology). The antecedent features here are supplied per pixel from **gridded
+SILO** ([`antecedent.antecedent_grid`](../emt/antecedent.py) samples the SILO grid
+over the AOI and reprojects it onto the 30 m field), so they vary spatially at
+SILO's ≈5 km resolution — the same mechanism a national product would use. This
 is a qualitative showcase; the quantitative validation follows.
 
 ### Out-of-sample validation
