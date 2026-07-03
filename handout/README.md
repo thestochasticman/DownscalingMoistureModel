@@ -337,25 +337,26 @@ remaining levers are listed under [Future work](#future-work).
 
 Stage 6 applies the model per pixel to produce the 30 m field
 ([`downscale.py`](modules/downscale.py.md)) — the product the whole pipeline
-exists to generate. To make the downscaling explicit, here is the **coarse
-≈1 km SMIPS input** over the Kyeamba focus area on nine dates through 2008 (the
-quantity being downscaled, in mm):
+exists to generate. The figure below pairs the **coarse ≈1 km SMIPS input**
+(left, mm — the quantity being downscaled) with the **generated 30 m field**
+(right, %, model4 trained on all 36 stations) over the Kyeamba focus area on
+nine dates through 2008, one row per date:
 
-![Coarse SMIPS input, Kyeamba 2008](figures/downscale_gallery_smips.png)
+![Coarse SMIPS input beside generated 30 m field, Kyeamba 2008](figures/downscale_gallery_paired.png)
 
-and the **generated 30 m field** for the same dates — model4 trained on all 36
-stations — on its own shared colour scale:
+Reading across each row shows what the model adds: the SMIPS input is blocky
+(≈1 km cells) and carries only the broad wetting/drying signal, while the 30 m
+output keeps that signal and resolves each cell into terrain structure —
+dendritic drainage lines, a persistently wet upper valley, drier ridges. Reading
+down the rows shows the seasonal cycle: wetter through the June–September austral
+winter (areal mean ≈25 % in August), drier in summer (≈18 % in
+January/December), the expected south-east Australian rainfall seasonality.
 
-![Generated 30 m soil moisture, Kyeamba 2008](figures/downscale_gallery.png)
-
-Comparing the two galleries shows what the model adds. The SMIPS input is blocky
-(≈1 km cells) and carries only the broad wetting/drying signal; the 30 m output
-keeps that temporal signal but resolves each cell into terrain structure —
-dendritic drainage lines, a persistently wet upper valley, drier ridges. Both
-also show the seasonal cycle on their shared scales: wetter through the
-June–September austral winter (areal mean ≈25 % in August), drier in summer
-(≈18 % in January/December), the expected south-east Australian rainfall
-seasonality. This is a qualitative showcase; the quantitative validation follows.
+The same two galleries at full size, each on its own shared colour scale, are
+[`figures/downscale_gallery_smips.png`](figures/downscale_gallery_smips.png)
+(coarse input) and
+[`figures/downscale_gallery.png`](figures/downscale_gallery.png) (30 m output).
+This is a qualitative showcase; the quantitative validation follows.
 
 ### Out-of-sample validation
 

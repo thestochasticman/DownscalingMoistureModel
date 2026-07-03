@@ -27,6 +27,7 @@ from emt.model4.model import build_estimator, ensure_features, FEATURES, TARGET
 REPO = Path(__file__).resolve().parent.parent
 FIG = REPO / "handout" / "figures" / "downscale_gallery.png"
 FIG_SMIPS = REPO / "handout" / "figures" / "downscale_gallery_smips.png"
+FIG_PAIR = REPO / "handout" / "figures" / "downscale_gallery_paired.png"
 TABLE = REPO / "data" / "train_catchment_plus_m_2006_2010.csv"
 AOI = "kyeamba"                       # terrain relief -> visible drainage structure
 CLIM_PERIOD = (date(2006, 1, 1), date(2010, 12, 31))
@@ -91,3 +92,38 @@ gallery(smips_fields, "YlGnBu", "SMIPS TotalBucket (mm)",
 gallery(pred_fields, "YlGnBu", "root-zone soil moisture (%)",
         f"Generated 30 m soil moisture over {AOI.title()}, 2008 "
         f"(model4; shared colour scale)", FIG)
+
+
+def paired(smips_fields, pred_fields, out):
+    """One image: coarse SMIPS (left) beside the 30 m field (right), per date."""
+    def rng(fields):
+        v = np.concatenate([f.values[np.isfinite(f.values)] for _, f in fields])
+        return np.percentile(v, [2, 98])
+    svmin, svmax = rng(smips_fields)
+    pvmin, pvmax = rng(pred_fields)
+    n = len(smips_fields)
+    fig, axes = plt.subplots(n, 2, figsize=(6.4, n * 2.35))
+    ims = [None, None]
+    for i, ((d, sf), (_, pf)) in enumerate(zip(smips_fields, pred_fields)):
+        ims[0] = axes[i, 0].imshow(sf.values, extent=ext, origin="upper",
+                                   cmap="YlGnBu", vmin=svmin, vmax=svmax)
+        ims[1] = axes[i, 1].imshow(pf.values, extent=ext, origin="upper",
+                                   cmap="YlGnBu", vmin=pvmin, vmax=pvmax)
+        axes[i, 0].set_ylabel(d.strftime("%d %b %Y"), fontsize=10)
+        for j in (0, 1):
+            axes[i, j].set_xticks([]); axes[i, j].set_yticks([])
+    axes[0, 0].set_title("Coarse SMIPS input\n(~1 km, mm)", fontsize=11)
+    axes[0, 1].set_title("Generated 30 m\n(model4, %)", fontsize=11)
+    fig.subplots_adjust(left=0.11, right=0.86, top=0.95, bottom=0.03,
+                        wspace=0.05, hspace=0.06)
+    fig.colorbar(ims[0], cax=fig.add_axes([0.885, 0.53, 0.02, 0.38]),
+                 label="SMIPS (mm)")
+    fig.colorbar(ims[1], cax=fig.add_axes([0.885, 0.08, 0.02, 0.38]),
+                 label="soil moisture (%)")
+    fig.suptitle(f"Coarse SMIPS → generated 30 m, {AOI.title()} 2008", fontsize=13, y=0.985)
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+    stamp(f"wrote {out.relative_to(REPO)}")
+
+
+paired(smips_fields, pred_fields, FIG_PAIR)
