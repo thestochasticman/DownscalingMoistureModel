@@ -48,8 +48,7 @@ Permutation importance is led by the **30-day** water balance `ppet_30`, with
 not separate. The **year** window is more useful here than on the 30-station
 catchment: `rain_365_anom` (this year's rain vs the pixel's normal — a drought
 index) is the *second* antecedent feature on the 36-station set, because the dry,
-drought-exposed western
-[M-sites](../README.md#extending-coverage-regional-sites-30--36-stations) are
+drought-exposed western regional M-sites (M1–M7, added to broaden coverage) are
 where multi-year rainfall deficit carries real signal. Correspondingly the gain
 is larger on 36 stations (+0.025 pooled) than on the 30-station catchment
 (+0.009), and per-station |bias| falls at 27 of 36 stations.

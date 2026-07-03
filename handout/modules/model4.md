@@ -24,16 +24,15 @@ were stuck on.
 The leave-site-out fit, feature importance, the paired model1 → model4
 per-station NSE/bias comparison, and the 30-station held-out time series are
 plotted by [`plot_model4_results.py`](../plot_model4_results.py)
-(`figures/model4_results.png`, `figures/model4_per_station.png`) — see the
-[README](../README.md#the-improvement-search-model4).
+(`figures/model4_results.png`, `figures/model4_per_station.png`).
 
 **Current default training set: 36 stations.** The table above is the 30-station
 development result. model4's production training set now also includes the six
 scattered regional Murrumbidgee sites (M1–M7), built reproducibly by
 [`emt/build_dataset.py`](../../emt/build_dataset.py) → pooled NSE **+0.368**,
 18/36 stations positive, median per-station NSE −0.01. The estimator and features
-are unchanged; only the data broadened. See
-[Extending coverage](../README.md#extending-coverage-regional-sites-30--36-stations).
+are unchanged; only the data broadened. The recommended model
+([`model6`](model6.md)) adds antecedent-meteorology features on top of this.
 
 | Function | Role |
 |---|---|
@@ -59,9 +58,10 @@ are unchanged; only the data broadened. See
 3. **SLGA soil, rehabilitated** ([`slga.py`](slga.py.md)). With the climatology
    anchoring the level, the four soil covariates add skill and give the best
    per-station profile (median −0.07). The earlier
-   [negative soil result](../README.md#soil-covariate-experiment-negative-result)
-   was *conditional* on the missing level feature, not absolute: without an
-   anchor, soil acted as a station ID; with one, it contributes texture signal.
+   negative soil result (soil alone acted as a near-unique station ID and hurt
+   leave-site-out skill; see [`slga.py`](slga.py.md)) was *conditional* on the
+   missing level feature, not absolute: without an anchor soil acts as a station
+   ID; with one, it contributes texture signal.
 
 ## What was tested and did NOT make the cut
 
@@ -109,9 +109,8 @@ Demonstrated end-to-end by
 10.3 %) but the single-day spatial pattern is worse (ubRMSE 2.4 → 4.9 %) — the
 30 m field inherits blocky SLGA map-unit boundaries and mutes some terrain
 detail. The full-record leave-region-out numbers (Yanco NSE −1.81 → −0.44)
-remain the meaningful transfer measure; see the
-[README](../README.md#the-same-demonstration-with-model4) for the figure and
-the calibration-vs-texture tradeoff.
+remain the meaningful transfer measure. The soil-texture-vs-per-station-skill
+tension is explored further in [`model5`](model5.md).
 
 ---
 <!-- NAV -->

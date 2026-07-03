@@ -10,11 +10,13 @@ Loads static soil covariates from the Soil and Landscape Grid of Australia
 (SLGA v2, TERN), ~90 m national soil-property grids. Built to test whether soil
 supplies the absolute-moisture baseline that SMIPS and terrain miss.
 
-> **Status: not in the current model.** Soil covariates were evaluated and did
-> not improve leave-site-out skill (they act as a per-station identifier); see
-> the [soil covariate experiment](../README.md#soil-covariate-experiment-negative-result).
-> This loader is retained as working infrastructure for a future attempt with a
-> denser station network.
+> **Status: used in the recommended model — but the result was conditional.**
+> Added *alone* (to models 1–3), soil covariates did **not** improve
+> leave-site-out skill: `soil_sand` became a near-unique per-station identifier
+> and hurt generalisation. But once the SMIPS pixel-climatology supplies a
+> legitimate level anchor, the same four soil covariates *help* — so soil is a
+> feature of [`model4`](model4.md) and [`model6`](model6.md). The lesson: soil is
+> useful as *texture* on top of a level signal, not as the level itself.
 
 | Function | Role |
 |---|---|

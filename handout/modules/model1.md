@@ -49,7 +49,7 @@ the coarse predictor. Expanding the training set to three catchments
 (see the [README](../README.md)) raises pooled skill to r = 0.54, NSE = +0.15 and
 increases SMIPS importance to 0.34. It was the best-performing model until the
 climatology + soil feature work produced [`model4`](model4.md), which supersedes
-it on every metric (see [Model comparison](../README.md#model-comparison));
+it on every metric (see [`model4`](model4.md) and [`model6`](model6.md));
 `model1` is retained as the baseline the improvement is measured against.
 
 ---

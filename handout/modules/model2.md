@@ -34,10 +34,10 @@ On **cross-site ranking** (the metric that governs a spatial map) the Random
 Forest is better: pooled NSE +0.15 vs +0.02, r 0.53 vs 0.36. A single global
 hyperplane extracts less of the limited between-site signal than the forest's
 nonlinear splits. The two models are different operating points on a
-cross-site ↔ per-station tradeoff (see
-[Model comparison](../README.md#model-comparison)), so the better choice depends
+cross-site ↔ per-station tradeoff, so the better choice depends
 on the objective: the Random Forest for the downscaled map,
-the linear model for interpretable per-site analysis.
+the linear model for interpretable per-site analysis. (That tradeoff was later
+broken by features rather than estimator choice — see [`model4`](model4.md).)
 
 ## Strengthening was tested
 

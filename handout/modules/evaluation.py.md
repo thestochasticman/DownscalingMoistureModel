@@ -74,8 +74,7 @@ substantially — both are returned and both are reported.
 
 The gap between the two is the central result of the project: the model reproduces
 **dynamics** but carries a per-station absolute-level **bias**. The per-station
-figure is the one to weight (see the
-[README](../README.md#per-station-performance)).
+figure is the one to weight.
 
 ## Return value
 

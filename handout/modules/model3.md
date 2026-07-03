@@ -8,8 +8,7 @@ Source: [`../../emt/model3/model.py`](../../emt/model3/model.py)
 
 Same target and features as [`model1`](model1.md) and [`model2`](model2.md), but
 the estimator is `HistGradientBoostingRegressor` — histogram-binned gradient
-boosting. It was built to test the middle ground on the
-[future-work list](../README.md#future-work): a tree ensemble that, unlike the
+boosting. It was built to test a middle ground: a tree ensemble that, unlike the
 Random Forest, reduces bias by fitting each tree to the previous trees' residuals.
 
 | Function | Role |
@@ -77,7 +76,7 @@ residual is a per-station level bias.
 by a feature (the SMIPS pixel climatology) plus much heavier regularisation of
 this same estimator family. [`model4`](model4.md) is that configuration
 (pooled NSE +0.35); `model3` is retained as the stock-defaults boosting
-reference point. See [Model comparison](../README.md#model-comparison).
+reference point. See [`model6`](model6.md), the recommended model.
 
 ---
 <!-- NAV -->

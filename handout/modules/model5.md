@@ -58,10 +58,9 @@ LOSO drop is an upper bound — but the direction is robust and expected.)
 
 ## Status
 
-`model4` remains the recommended model. `model5` is retained to document the
-texture-vs-skill tension and, at most, to produce a presentation-quality map where
-lower per-station skill is acceptable. See the
-[README](../README.md#soil-smoothing-experiment-model5-negative-result).
+[`model6`](model6.md) is the recommended model; `model5` is **not** — it is
+retained to document the texture-vs-skill tension and, at most, to produce a
+presentation-quality map where lower per-station skill is acceptable.
 
 ---
 <!-- NAV -->
