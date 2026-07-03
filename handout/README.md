@@ -8,6 +8,12 @@ downscaling the TERN SMIPS `TotalBucket` profile soil-water product (mm,
 learn how fine-scale terrain redistributes moisture within each ≈1 km SMIPS
 cell; the model is then applied at the 30 m resolution of the Copernicus DEM.
 
+The intended end product is **national (all of Australia)**. All covariates used
+here are Australia-wide, so the method already runs anywhere; the work to date
+develops and validates it in the Murrumbidgee catchment, and the path to a
+national product is set out in
+[Toward a national product](#toward-a-national-product).
+
 This page is both the **index** and the **results synthesis**. Every pipeline
 component and every model has its own page under [`modules/`](modules/), and the
 pages are chained with prev/next links so the handout can also be read straight
@@ -491,6 +497,11 @@ directly. Results to date:
 | Huber (robust linear) | tested only | −0.02, 0.34 | 15/30 |
 | [model5](modules/model5.md) | model4 + smoothed soil (tradeoff, not recommended) | +0.13, 0.50 | 12/30 |
 
+Estimators are compared on the same 30-station table for a clean apples-to-apples
+read. On the current default **36-station** training set (with the regional
+M-sites; see [Extending coverage](#extending-coverage-regional-sites-30--36-stations))
+model4 scores pooled NSE **+0.368**, 18/36 stations positive.
+
 Among models 1–3 the results traced a **cross-site ↔ per-station tradeoff**:
 every configuration that put more stations at positive per-station NSE gave up
 cross-site skill, and vice versa. `model1` (Random Forest) took the cross-site
@@ -652,8 +663,75 @@ and the [oracle](#the-oracle-ceiling-how-much-is-left-and-where): the binding
 constraint is the site-level information content, not preprocessing. model4
 remains the recommended model.
 
+## Extending coverage: regional sites (30 → 36 stations)
+
+model4 was developed on the three dense catchments, but **the goal is a national
+product**, so the next lever the oracle points to — more sites — should first be
+pulled toward *breadth* (spread across the landscape), not more stations in the
+same clusters. As a first move, the six usable scattered regional Murrumbidgee
+sites (M1–M7; one record was surface-only and dropped) were added: single
+stations flung across the whole catchment, from the semi-arid western plains
+(M7, mean 12.7 % — drier than anything in the original set) to the wetter south.
+Because every covariate is national, no pipeline change was needed, only more
+`(station, coordinates, in-situ)` inputs; the build is reproducible via
+[`emt/build_dataset.py`](../emt/build_dataset.py).
+
+![Regional-site extension](figures/msites_extension.png)
+
+- **(a)** Held-out per-station NSE mapped across all 36 stations (stars =
+  M-sites): a spatial skill map — where the model, tested at each location it
+  never trained on, does well or badly.
+- **(b)** The original 30 stations' per-station NSE, trained on 30 vs on 36.
+- **(c)** Predicted vs observed for the six held-out M-sites.
+
+Three findings:
+
+1. **Aggregate skill improved modestly.** Pooled NSE 0.354 → 0.368; per-station
+   positive 14/30 (47 %) → 18/36 (50 %); median per-station NSE −0.07 → **−0.01**,
+   essentially at the NSE > 0 threshold.
+2. **Distant sites did not lift the dense clusters** (median per-station NSE on
+   the original 30: −0.07 → −0.13; a wash). Cluster stations are limited by
+   *within-cluster* level differences that far-away sites cannot inform.
+3. **The model predicts the six brand-new scattered sites better than it predicts
+   the clusters** — 4/6 positive NSE, with excellent dynamics (r 0.62–0.83).
+   That the method transfers to distant, never-seen locations is the encouraging
+   proof-of-concept for a national product.
+
+The lesson splits "more sites" into two strategies: **breadth** (spread across
+climate zones — improves transfer and coverage) and **depth** (dense local sites
+— needed to resolve within-cluster level, e.g. the dense Yanco YA/YB grid). For
+an all-of-Australia product, breadth is the priority; see
+[Toward a national product](#toward-a-national-product). The 36-station table is
+now the default training set.
+
+## Toward a national product
+
+Everything in this handout was trained and validated in the **Murrumbidgee**
+catchment — one temperate-to-semi-arid regime. The result is a **validated
+method, not a national product**: the pipeline's covariates (SMIPS, Copernicus
+DEM, SLGA soil, SILO climate) are all Australia-wide, so the model *runs*
+anywhere, but its skill has only been demonstrated in one region, and the level
+model was fit from ~36 nearby stations. Two things are needed to make it
+national, neither of which requires changing the method:
+
+1. **A national in-situ training set** — sites spanning Australia's climate, soil
+   and terrain diversity (tropical north, arid interior, Mediterranean SW,
+   temperate SE, alpine, Tasmania). The M-site result shows the method transfers
+   to new distant locations, which is what makes this worth doing. The practical
+   route is aggregating existing Australian networks (OzNet, CosmOZ, OzFlux and
+   others) through the standard **ISMN** format — being built as a **separate
+   repository**; this repo stays the modelling/method side.
+2. **National, stratified evaluation** — replace the single-region number with
+   **leave-climate-zone-out** validation (hold out an entire zone, predict it) and
+   report skill per Köppen zone / state. A single national figure would hide large
+   regional variation, and the SMIPS→% relationship likely needs climate-zone
+   interactions or per-zone models — which only a national in-situ set can reveal.
+
 ## Limitations
 
+- **Regional scope.** Skill is demonstrated only in the Murrumbidgee; national
+  performance is unquantified until a national in-situ set and leave-climate-zone
+  evaluation exist (see [Toward a national product](#toward-a-national-product)).
 - **Residual level bias on transfer.** The principal residual error remains a
   regional level offset, though much reduced: model4 halves the leave-site-out
   per-station deficit (median NSE −0.56 → −0.07) and moves leave-region-out from
@@ -673,12 +751,15 @@ remains the recommended model.
 
 ## Future work
 
-1. **More training sites (priority, now quantified).** The oracle diagnostic
-   bounds the payoff: a perfect site-level model would take NSE from 0.35 to
-   0.83. Adding stations (e.g. the scattered regional Murrumbidgee M-sites, or
-   other networks) directly constrains the level model — the one component the
-   current data cannot pin down — and would also let the SILO climate features
-   (marginal at 30 sites) be re-tested.
+1. **More training sites (priority; regional breadth started, national next).**
+   The oracle bounds the payoff: a perfect site-level model would take NSE from
+   0.35 to 0.83. The regional M-sites (above) were a first, in-catchment step and
+   confirmed the method transfers to distant sites. The decisive move is a
+   **national** in-situ set — aggregating OzNet, CosmOZ, OzFlux and other
+   Australian networks via ISMN (a **separate repository**) — which both
+   constrains the level model across climate zones and lets the SILO climate
+   features (marginal at 36 sites) be re-tested. See
+   [Toward a national product](#toward-a-national-product).
 2. **Bias correction.** A per-site offset or quantile mapping to SMIPS
    climatology would address the residual regional level bias (±6–7 % under
    leave-region-out for model4).
@@ -704,7 +785,9 @@ PYTHONPATH=. python handout/plot_results.py         # smips_correction, leave_si
 PYTHONPATH=. python handout/plot_catchment.py       # catchment_results
 PYTHONPATH=. python handout/plot_per_station.py     # catchment_per_station, kyeamba_per_station
 PYTHONPATH=. python handout/plot_shrinkage.py       # shrinkage_diagnostic
+PYTHONPATH=. python -m emt.build_dataset            # (re)build the 36-station training table
 PYTHONPATH=. python handout/plot_model4_results.py  # model4_results, model4_per_station
+PYTHONPATH=. python handout/plot_msites.py          # msites_extension (30 -> 36 stations)
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)
 PYTHONPATH=. python handout/plot_downscale_model4.py # downscale_yanco_model4
 PYTHONPATH=. python handout/plot_downscale_model5.py # downscale_yanco_model5 (soil-smoothing tradeoff)

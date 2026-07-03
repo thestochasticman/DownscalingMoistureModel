@@ -27,6 +27,14 @@ plotted by [`plot_model4_results.py`](../plot_model4_results.py)
 (`figures/model4_results.png`, `figures/model4_per_station.png`) — see the
 [README](../README.md#the-improvement-search-model4).
 
+**Current default training set: 36 stations.** The table above is the 30-station
+development result. model4's production training set now also includes the six
+scattered regional Murrumbidgee sites (M1–M7), built reproducibly by
+[`emt/build_dataset.py`](../../emt/build_dataset.py) → pooled NSE **+0.368**,
+18/36 stations positive, median per-station NSE −0.01. The estimator and features
+are unchanged; only the data broadened. See
+[Extending coverage](../README.md#extending-coverage-regional-sites-30--36-stations).
+
 | Function | Role |
 |---|---|
 | `build_estimator(**kw)` | `HistGradientBoostingRegressor(max_leaf_nodes=3, learning_rate=0.03, max_iter=800, l2=1)` |
