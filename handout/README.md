@@ -337,20 +337,25 @@ remaining levers are listed under [Future work](#future-work).
 
 Stage 6 applies the model per pixel to produce the 30 m field
 ([`downscale.py`](modules/downscale.py.md)) — the product the whole pipeline
-exists to generate. The gallery below is model4 (trained on all 36 stations)
-applied over the Kyeamba focus area on nine dates through 2008, on a single
-shared colour scale:
+exists to generate. To make the downscaling explicit, here is the **coarse
+≈1 km SMIPS input** over the Kyeamba focus area on nine dates through 2008 (the
+quantity being downscaled, in mm):
+
+![Coarse SMIPS input, Kyeamba 2008](figures/downscale_gallery_smips.png)
+
+and the **generated 30 m field** for the same dates — model4 trained on all 36
+stations — on its own shared colour scale:
 
 ![Generated 30 m soil moisture, Kyeamba 2008](figures/downscale_gallery.png)
 
-Two signals are visible at once. **Spatially**, each frame resolves the ≈1 km
-SMIPS input into 30 m structure — dendritic drainage lines, a persistently wet
-upper valley, and drier ridges — detail absent from the coarse product.
-**Temporally**, the shared scale shows the seasonal cycle: the area darkens
-(wetter) through the June–September austral winter (areal mean ≈25 % in August)
-and pales (drier) in summer (≈18 % in January/December), the expected south-east
-Australian rainfall seasonality. This is a qualitative showcase of the generated
-field; the quantitative validation follows.
+Comparing the two galleries shows what the model adds. The SMIPS input is blocky
+(≈1 km cells) and carries only the broad wetting/drying signal; the 30 m output
+keeps that temporal signal but resolves each cell into terrain structure —
+dendritic drainage lines, a persistently wet upper valley, drier ridges. Both
+also show the seasonal cycle on their shared scales: wetter through the
+June–September austral winter (areal mean ≈25 % in August), drier in summer
+(≈18 % in January/December), the expected south-east Australian rainfall
+seasonality. This is a qualitative showcase; the quantitative validation follows.
 
 ### Out-of-sample validation
 
