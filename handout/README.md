@@ -697,6 +697,18 @@ Three findings:
    That the method transfers to distant, never-seen locations is the encouraging
    proof-of-concept for a national product.
 
+The held-out temporal series make the transfer concrete — each M-site is
+predicted by a model trained on the other 35 stations, never on itself:
+
+![Regional M-sites, held-out time series](figures/msites_timeseries.png)
+
+The prediction (purple) tracks the shape of the observations (black) at every
+site, including the far-western M7 (mean 12.7 %, well below the training
+clusters). Where a site misses, it is a level offset, not a dynamics failure —
+M2 (bias +6.5 %) is the clearest case: the wetting/drying is right, the baseline
+is high. This is the same level-vs-dynamics split seen throughout, now at
+catchment-spanning distances.
+
 The lesson splits "more sites" into two strategies: **breadth** (spread across
 climate zones — improves transfer and coverage) and **depth** (dense local sites
 — needed to resolve within-cluster level, e.g. the dense Yanco YA/YB grid). For
@@ -787,7 +799,7 @@ PYTHONPATH=. python handout/plot_per_station.py     # catchment_per_station, kye
 PYTHONPATH=. python handout/plot_shrinkage.py       # shrinkage_diagnostic
 PYTHONPATH=. python -m emt.build_dataset            # (re)build the 36-station training table
 PYTHONPATH=. python handout/plot_model4_results.py  # model4_results, model4_per_station
-PYTHONPATH=. python handout/plot_msites.py          # msites_extension (30 -> 36 stations)
+PYTHONPATH=. python handout/plot_msites.py          # msites_extension, msites_timeseries
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)
 PYTHONPATH=. python handout/plot_downscale_model4.py # downscale_yanco_model4
 PYTHONPATH=. python handout/plot_downscale_model5.py # downscale_yanco_model5 (soil-smoothing tradeoff)

@@ -7,6 +7,7 @@ leave-site-out effect. Three panels:
   (b) the original 30 stations' per-station NSE, original vs M-augmented
       training (dumbbell);
   (c) predicted vs observed for the six held-out M-sites.
+Also writes msites_timeseries.png: the held-out temporal series for each M-site.
 
 Run from repo root::  PYTHONPATH=. python handout/plot_msites.py
 """
@@ -101,5 +102,32 @@ fig.suptitle("Extending coverage: +6 regional Murrumbidgee sites (30 → 36 stat
 fig.tight_layout()
 fig.savefig(FIG, dpi=130, bbox_inches="tight")
 print("wrote", FIG.relative_to(REPO), flush=True)
+
+# ---- temporal grid: held-out series for each M-site --------------------------
+import matplotlib.dates as mdates
+FIG_TS = REPO / "handout" / "figures" / "msites_timeseries.png"
+pred_ts = pred.copy()
+pred_ts["time"] = pd.to_datetime(pred_ts["time"])
+figt, axes = plt.subplots(2, 3, figsize=(15, 6.2), sharex=True)
+axes = axes.ravel()
+for ax, stn in zip(axes, msite):
+    g = pred_ts[pred_ts.station == stn].sort_values("time")
+    ax.plot(g["time"], g[TARGET], color="k", lw=0.7, label="observed")
+    ax.plot(g["time"], g["pred"], color="#9467bd", lw=0.9, label="held-out prediction")
+    m = ps36.loc[stn]
+    ax.set_title(f"{stn}   r={m.r:.2f}  NSE={m.nse:.2f}  bias={m.bias:+.1f}", fontsize=10)
+    ax.tick_params(labelsize=7)
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    ax.grid(alpha=.25)
+for ax in axes[len(msite):]:
+    ax.set_visible(False)
+axes[0].legend(fontsize=8, loc="upper left")
+figt.suptitle("Regional M-sites: held-out prediction vs observation, 2006–2010 "
+              "(each site trained on the other 35, never on itself)", fontsize=12, y=1.0)
+figt.supylabel("root-zone soil moisture (%)", fontsize=10)
+figt.tight_layout(rect=[0.01, 0, 1, 0.97])
+figt.savefig(FIG_TS, dpi=120)
+print("wrote", FIG_TS.relative_to(REPO), flush=True)
 print(f"30-station pooled NSE={p30['nse']:.3f} ({int((ps30['nse']>0).sum())}/30>0) | "
       f"36-station pooled NSE={p36['nse']:.3f} ({int((ps36['nse']>0).sum())}/36>0)", flush=True)
