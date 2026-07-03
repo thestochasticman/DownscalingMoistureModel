@@ -336,11 +336,28 @@ remaining levers are listed under [Future work](#future-work).
 ## 30 m downscaling and spatial transfer
 
 Stage 6 applies the model per pixel to produce the 30 m field
-([`downscale.py`](modules/downscale.py.md)). To obtain an out-of-sample
-assessment, the model was trained on Kyeamba and Adelong only, with Yanco
-withheld entirely; the resulting field and its validation therefore represent
-transfer to an unobserved catchment. Evaluation date: 2008-07-31 (all 12 Yanco
-stations reporting).
+([`downscale.py`](modules/downscale.py.md)) — the product the whole pipeline
+exists to generate. The gallery below is model4 (trained on all 36 stations)
+applied over the Kyeamba focus area on nine dates through 2008, on a single
+shared colour scale:
+
+![Generated 30 m soil moisture, Kyeamba 2008](figures/downscale_gallery.png)
+
+Two signals are visible at once. **Spatially**, each frame resolves the ≈1 km
+SMIPS input into 30 m structure — dendritic drainage lines, a persistently wet
+upper valley, and drier ridges — detail absent from the coarse product.
+**Temporally**, the shared scale shows the seasonal cycle: the area darkens
+(wetter) through the June–September austral winter (areal mean ≈25 % in August)
+and pales (drier) in summer (≈18 % in January/December), the expected south-east
+Australian rainfall seasonality. This is a qualitative showcase of the generated
+field; the quantitative validation follows.
+
+### Out-of-sample validation
+
+To obtain an out-of-sample assessment, the model was trained on Kyeamba and
+Adelong only, with Yanco withheld entirely; the resulting field and its
+validation therefore represent transfer to an unobserved catchment. Evaluation
+date: 2008-07-31 (all 12 Yanco stations reporting).
 
 ![30 m downscaling over Yanco](figures/downscale_yanco.png)
 
@@ -803,6 +820,7 @@ PYTHONPATH=. python handout/plot_msites.py          # msites_extension, msites_t
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)
 PYTHONPATH=. python handout/plot_downscale_model4.py # downscale_yanco_model4
 PYTHONPATH=. python handout/plot_downscale_model5.py # downscale_yanco_model5 (soil-smoothing tradeoff)
+PYTHONPATH=. python handout/plot_downscale_gallery.py # downscale_gallery (seasonal 30 m product)
 ```
 
 `plot_results.py` rebuilds the Kyeamba June–July 2020 table, reconstructs the
