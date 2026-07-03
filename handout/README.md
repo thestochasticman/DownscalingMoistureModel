@@ -357,7 +357,19 @@ The same two galleries at full size, each on its own shared colour scale, are
 [`figures/downscale_gallery_smips.png`](figures/downscale_gallery_smips.png)
 (coarse input) and
 [`figures/downscale_gallery.png`](figures/downscale_gallery.png) (30 m output).
-This is a qualitative showcase; the quantitative validation follows.
+
+The galleries above use model4. The recommended model, [`model6`](modules/model6.md),
+produces the same field with the antecedent-meteorology correction applied:
+
+![Generated 30 m soil moisture, model6, Kyeamba 2008](figures/downscale_gallery_model6.png)
+
+It is visually near-identical to the model4 gallery — as expected, since the
+antecedent features mainly correct the per-station *level* (the metric gain is in
+bias, not spatial texture, which still comes from terrain, soil and SMIPS
+climatology). One caveat for this map: SILO is a ≈5 km grid, so the trailing-window
+features are evaluated at the AOI centre and applied uniformly over the ≈35 km
+field (a small-AOI approximation; a national product would use gridded SILO). This
+is a qualitative showcase; the quantitative validation follows.
 
 ### Out-of-sample validation
 
@@ -860,7 +872,8 @@ PYTHONPATH=. python handout/plot_msites.py          # msites_extension, msites_t
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)
 PYTHONPATH=. python handout/plot_downscale_model4.py # downscale_yanco_model4
 PYTHONPATH=. python handout/plot_downscale_model5.py # downscale_yanco_model5 (soil-smoothing tradeoff)
-PYTHONPATH=. python handout/plot_downscale_gallery.py # downscale_gallery (seasonal 30 m product)
+PYTHONPATH=. python handout/plot_downscale_gallery.py # downscale_gallery + _smips + _paired
+PYTHONPATH=. python handout/plot_downscale_gallery_model6.py # downscale_gallery_model6
 ```
 
 `plot_results.py` rebuilds the Kyeamba June–July 2020 table, reconstructs the
