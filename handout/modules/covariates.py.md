@@ -37,8 +37,6 @@ The covariates are static per station (sampled once and broadcast across days)
 and are joined into the training table in [`features.py`](features.py.md).
 
 ---
-
----
 <!-- NAV -->
 [← SMIPS coarse predictor](smips.py.md) · [Index](../README.md) · [Soil covariates (SLGA) →](slga.py.md)
 <!-- /NAV -->

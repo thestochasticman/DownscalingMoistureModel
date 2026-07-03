@@ -45,8 +45,6 @@ and reverted (the experiment above); the loader remains callable on its own for
 re-evaluation when more sites are available.
 
 ---
-
----
 <!-- NAV -->
 [← Terrain covariates](covariates.py.md) · [Index](../README.md) · [Training table →](features.py.md)
 <!-- /NAV -->

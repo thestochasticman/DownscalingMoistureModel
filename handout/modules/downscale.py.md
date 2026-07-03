@@ -1,7 +1,7 @@
 # `downscale.py`: 30 m field generation (Stage 6)
 
 <!-- NAV -->
-[← model5 · Soil smoothing](model5.md) · [Index](../README.md)
+[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md)
 <!-- /NAV -->
 
 Source: [`../../emt/downscale.py`](../../emt/downscale.py)
@@ -44,8 +44,6 @@ varying within each coarse SMIPS cell (see panel (c) of the Stage 6 figure in th
   The per-pixel hook was reverted.
 
 ---
-
----
 <!-- NAV -->
-[← model5 · Soil smoothing](model5.md) · [Index](../README.md)
+[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md)
 <!-- /NAV -->

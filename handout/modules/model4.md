@@ -66,8 +66,9 @@ are unchanged; only the data broadened. See
 ## What was tested and did NOT make the cut
 
 - **SILO climate dynamics** (rain/PET/VPD, via PaddockTS + the open S3 archive):
-  +0.02 alone, ~0 once soil is present. Loader path validated; worth revisiting
-  with more sites.
+  +0.02 alone, ~0 once soil is present *in this coarse form*. **Revisited and now
+  used:** a targeted trailing-window form (last week/month/year water balance) does
+  help and is the basis of [`model6`](model6.md), which supersedes model4.
 - **SMIPS temporal lags/rolling means**: no gain (the anomaly features already
   carry the state).
 - **Aridity statics, equal-station weighting**: hurt pooled skill.
@@ -111,8 +112,6 @@ detail. The full-record leave-region-out numbers (Yanco NSE −1.81 → −0.44)
 remain the meaningful transfer measure; see the
 [README](../README.md#the-same-demonstration-with-model4) for the figure and
 the calibration-vs-texture tradeoff.
-
----
 
 ---
 <!-- NAV -->

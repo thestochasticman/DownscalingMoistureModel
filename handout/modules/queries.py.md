@@ -32,8 +32,6 @@ Queries are consumed by [`smips.py`](smips.py.md) and
 [`covariates.py`](covariates.py.md).
 
 ---
-
----
 <!-- NAV -->
 [← Ground truth (OzNet)](oznet.py.md) · [Index](../README.md) · [SMIPS coarse predictor →](smips.py.md)
 <!-- /NAV -->

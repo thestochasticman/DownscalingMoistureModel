@@ -36,7 +36,7 @@ then apply it. Each item links to a self-contained page.
 | 5 | [Soil covariates (SLGA)](modules/slga.py.md) | Root-zone clay/sand/AWC/bulk-density (used from model4 on) |
 | 6 | [Training table](modules/features.py.md) | One row per station-day: target + all predictors |
 
-**2 · Evaluating and modelling** — how skill is measured, and five models.
+**2 · Evaluating and modelling** — how skill is measured, and six models.
 
 | # | Page | Role |
 |---|---|---|
@@ -44,8 +44,9 @@ then apply it. Each item links to a self-contained page.
 | 8 | [model1 · Random Forest](modules/model1.md) | Baseline (pooled NSE +0.15) |
 | 9 | [model2 · Linear](modules/model2.md) | Interpretable comparison |
 | 10 | [model3 · Gradient boosting](modules/model3.md) | Stock-boosting reference |
-| 11 | [model4 · Climatology + soil](modules/model4.md) | **Recommended** (pooled NSE +0.35) |
+| 11 | [model4 · Climatology + soil](modules/model4.md) | The improved model (pooled NSE +0.35 / +0.37) |
 | 12 | [model5 · Soil smoothing](modules/model5.md) | A documented tradeoff, not recommended |
+| 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + climate (pooled NSE +0.39) |
 
 **3 · Applying the model**
 
@@ -64,9 +65,9 @@ Every model here is a regression from the coarse predictor and fine covariates t
 the in-situ target — they differ only in the estimator and feature set, and are
 scored by the identical [leave-site-out harness](modules/evaluation.py.md). The
 baseline ([`model1`](modules/model1.md)) is a **Random Forest**; the recommended
-model ([`model4`](modules/model4.md)) is regularised gradient boosting with added
-climatology and soil features. The narrative below builds from the first to the
-last. One structural property of the tree models recurs in the results: because a
+model ([`model6`](modules/model6.md)) is regularised gradient boosting with added
+SMIPS-climatology, soil and antecedent-meteorology features. The narrative below
+builds from the first to the last. One structural property of the tree models recurs in the results: because a
 tree leaf predicts an average of training samples, they cannot extrapolate beyond
 the training range and shrink predictions toward the mean (quantified in
 [Per-station performance](#per-station-performance)).
@@ -523,7 +524,11 @@ directly. Results to date:
 Estimators are compared on the same 30-station table for a clean apples-to-apples
 read. On the current default **36-station** training set (with the regional
 M-sites; see [Extending coverage](#extending-coverage-regional-sites-30--36-stations))
-model4 scores pooled NSE **+0.368**, 18/36 stations positive.
+model4 scores pooled NSE **+0.368** (18/36 positive), and
+[**model6**](modules/model6.md) — model4 plus antecedent-meteorology features —
+improves that to **+0.393** (r 0.644), lowering the median per-station bias from
+3.36 % to 3.16 % (see [Antecedent meteorology](#antecedent-meteorology-model6)).
+model6 is the current recommended model.
 
 Among models 1–3 the results traced a **cross-site ↔ per-station tradeoff**:
 every configuration that put more stations at positive per-station NSE gave up
@@ -739,6 +744,33 @@ an all-of-Australia product, breadth is the priority; see
 [Toward a national product](#toward-a-national-product). The 36-station table is
 now the default training set.
 
+## Antecedent meteorology (model6)
+
+Soil moisture is set by how much water has recently arrived versus left, and the
+current SMIPS value does not fully separate the *recent accumulation* from the
+state. [`model6`](modules/model6.md) adds SILO trailing-window features —
+rainfall, water balance `P − PET`, and vapour-pressure deficit over the **last
+week, month and year** ([`antecedent.py`](../emt/antecedent.py)). They are
+dynamic per-pixel series from a national ≈5 km grid, so they pass the same
+leakage test as the other features and are available at every 30 m pixel.
+
+| Metric (36 stations, leave-site-out) | model4 | model6 |
+|---|---|---|
+| Pooled NSE / r | 0.368 / 0.628 | **0.393 / 0.644** |
+| Median per-station \|bias\| | 3.36 % | **3.16 %** |
+| Per-station \|bias\| improved | — | **27/36 stations** |
+
+The gain lands where it matters: the residual per-station **level bias** — the
+binding constraint — falls at 27 of 36 stations, for a +0.025 pooled-NSE gain.
+Importance is led by the **30-day water balance** (`ppet_30`); the **year**
+window also contributes here (`rain_365_anom`, a drought index, is the second
+antecedent feature), because the dry, drought-exposed western M-sites are where
+multi-year rainfall deficit carries real signal — the 2006–2010 study period
+spans the Millennium Drought. The gain is larger on the 36-station set (+0.025)
+than on the 30-station catchment (+0.009) for the same reason. model6 is the
+current recommended model; it needs the SILO antecedent rasters at inference in
+addition to model4's climatology and soil layers.
+
 ## Toward a national product
 
 Everything in this handout was trained and validated in the **Murrumbidgee**
@@ -791,9 +823,10 @@ national, neither of which requires changing the method:
    0.35 to 0.83. The regional M-sites (above) were a first, in-catchment step and
    confirmed the method transfers to distant sites. The decisive move is a
    **national** in-situ set — aggregating OzNet, CosmOZ, OzFlux and other
-   Australian networks via ISMN (a **separate repository**) — which both
-   constrains the level model across climate zones and lets the SILO climate
-   features (marginal at 36 sites) be re-tested. See
+   Australian networks via ISMN (a **separate repository**) — which would
+   constrain the level model across climate zones, and let the antecedent-climate
+   features ([model6](#antecedent-meteorology-model6), already helpful at 36
+   sites) work across the full range of Australian rainfall regimes. See
    [Toward a national product](#toward-a-national-product).
 2. **Bias correction.** A per-site offset or quantile mapping to SMIPS
    climatology would address the residual regional level bias (±6–7 % under
@@ -821,6 +854,7 @@ PYTHONPATH=. python handout/plot_catchment.py       # catchment_results
 PYTHONPATH=. python handout/plot_per_station.py     # catchment_per_station, kyeamba_per_station
 PYTHONPATH=. python handout/plot_shrinkage.py       # shrinkage_diagnostic
 PYTHONPATH=. python -m emt.build_dataset            # (re)build the 36-station training table
+PYTHONPATH=. python -m emt.model6.model data/train_catchment_plus_m_2006_2010.csv  # model6 LOSO (fetches SILO)
 PYTHONPATH=. python handout/plot_model4_results.py  # model4_results, model4_per_station
 PYTHONPATH=. python handout/plot_msites.py          # msites_extension, msites_timeseries
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)

@@ -53,8 +53,6 @@ it on every metric (see [Model comparison](../README.md#model-comparison));
 `model1` is retained as the baseline the improvement is measured against.
 
 ---
-
----
 <!-- NAV -->
 [← Evaluation (leave-site-out)](evaluation.py.md) · [Index](../README.md) · [model2 · Linear →](model2.md)
 <!-- /NAV -->

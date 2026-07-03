@@ -80,8 +80,6 @@ this same estimator family. [`model4`](model4.md) is that configuration
 reference point. See [Model comparison](../README.md#model-comparison).
 
 ---
-
----
 <!-- NAV -->
 [← model2 · Linear](model2.md) · [Index](../README.md) · [model4 · Climatology + soil →](model4.md)
 <!-- /NAV -->

@@ -1,7 +1,7 @@
 # `model5`: model4 with smoothed soil (a documented tradeoff, not an improvement)
 
 <!-- NAV -->
-[← model4 · Climatology + soil](model4.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model4 · Climatology + soil](model4.md) · [Index](../README.md) · [model6 · Antecedent meteorology →](model6.md)
 <!-- /NAV -->
 
 Source: [`../../emt/model5/model.py`](../../emt/model5/model.py)
@@ -64,8 +64,6 @@ lower per-station skill is acceptable. See the
 [README](../README.md#soil-smoothing-experiment-model5-negative-result).
 
 ---
-
----
 <!-- NAV -->
-[← model4 · Climatology + soil](model4.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model4 · Climatology + soil](model4.md) · [Index](../README.md) · [model6 · Antecedent meteorology →](model6.md)
 <!-- /NAV -->

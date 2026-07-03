@@ -110,8 +110,6 @@ future date). The leave-region-out downscaling demonstration
 whole catchment is withheld instead of one station.
 
 ---
-
----
 <!-- NAV -->
 [← Training table](features.py.md) · [Index](../README.md) · [model1 · Random Forest →](model1.md)
 <!-- /NAV -->

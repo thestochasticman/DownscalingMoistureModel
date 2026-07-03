@@ -50,8 +50,6 @@ unseen feature combinations. The plain ridge is therefore the robust, correct
 linear configuration.
 
 ---
-
----
 <!-- NAV -->
 [← model1 · Random Forest](model1.md) · [Index](../README.md) · [model3 · Gradient boosting →](model3.md)
 <!-- /NAV -->

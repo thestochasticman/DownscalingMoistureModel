@@ -44,8 +44,6 @@ Long format, one record per station-day:
 [`features.py`](features.py.md) as the `sm_rootzone_pct` target.
 
 ---
-
----
 <!-- NAV -->
 [Index](../README.md) · [Study areas →](queries.py.md)
 <!-- /NAV -->

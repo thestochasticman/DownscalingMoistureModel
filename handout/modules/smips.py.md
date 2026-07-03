@@ -46,8 +46,6 @@ used window-dependent values; downstream products were rebuilt after clearing th
 cache.
 
 ---
-
----
 <!-- NAV -->
 [← Study areas](queries.py.md) · [Index](../README.md) · [Terrain covariates →](covariates.py.md)
 <!-- /NAV -->

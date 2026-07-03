@@ -47,8 +47,6 @@ Long-format table, one record per station-day, consumed by
 [`model1`](model1.md).
 
 ---
-
----
 <!-- NAV -->
 [← Soil covariates (SLGA)](slga.py.md) · [Index](../README.md) · [Evaluation (leave-site-out) →](evaluation.py.md)
 <!-- /NAV -->
