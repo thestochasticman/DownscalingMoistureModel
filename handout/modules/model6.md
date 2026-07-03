@@ -41,7 +41,7 @@ computable at every 30 m pixel at inference and cannot memorise station identity
 — the same leakage test the other features pass. SILO is fetched one year before
 the study start so the 365-day window is complete at every training date.
 
-## Which window matters — month, not year
+## Which window matters — month leads, year helps on the dry sites
 
 Permutation importance is led by the **30-day** water balance `ppet_30`, with
 `vpd_30` also contributing — the recent-month accumulation the SMIPS state does
