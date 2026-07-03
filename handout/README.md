@@ -783,6 +783,15 @@ than on the 30-station catchment (+0.009) for the same reason. model6 is the
 current recommended model; it needs the SILO antecedent rasters at inference in
 addition to model4's climatology and soil layers.
 
+The held-out temporal series for all 36 stations (purple = the regional
+M-sites):
+
+![model6 per-station held-out time series](figures/model6_per_station.png)
+
+As throughout, the prediction tracks the shape of each station's series; the
+residual misses are level offsets, now smaller than model4's thanks to the
+antecedent-water-balance correction.
+
 ## Toward a national product
 
 Everything in this handout was trained and validated in the **Murrumbidgee**
@@ -868,6 +877,7 @@ PYTHONPATH=. python handout/plot_shrinkage.py       # shrinkage_diagnostic
 PYTHONPATH=. python -m emt.build_dataset            # (re)build the 36-station training table
 PYTHONPATH=. python -m emt.model6.model data/train_catchment_plus_m_2006_2010.csv  # model6 LOSO (fetches SILO)
 PYTHONPATH=. python handout/plot_model4_results.py  # model4_results, model4_per_station
+PYTHONPATH=. python handout/plot_model6_results.py  # model6_per_station (36-station temporal)
 PYTHONPATH=. python handout/plot_msites.py          # msites_extension, msites_timeseries
 PYTHONPATH=. python handout/plot_downscale.py       # downscale_yanco (30 m field, model1)
 PYTHONPATH=. python handout/plot_downscale_model4.py # downscale_yanco_model4
