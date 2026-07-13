@@ -23,12 +23,32 @@ from __future__ import annotations
 
 import pandas as pd
 
+from sklearn.ensemble import HistGradientBoostingRegressor
+
 from emt.antecedent import ANTECEDENT_VARS, add_antecedent
 from emt.model4 import model as m4
-from emt.model4.model import build_estimator, TARGET  # same estimator  # noqa: F401
+from emt.model4.model import TARGET  # noqa: F401
 from emt.evaluation import metrics, leave_site_out_cv as _cv  # noqa: F401
 
 FEATURES = [*m4.FEATURES, *ANTECEDENT_VARS]
+
+
+def build_estimator(**kwargs) -> HistGradientBoostingRegressor:
+    """Boosting config for model6's (larger) feature set. Tuned by
+    GroupKFold-on-station on the corrected lookback features: with more, weaker
+    predictors the model wants **expressive** trees whose variance is controlled
+    by per-split feature subsampling rather than by tiny leaves (the opposite of
+    model4). Leave-site-out NSE 0.35 on 36 stations.
+
+    Note the contrast with model4's ``max_leaf_nodes=3``: that extreme-
+    regularisation optimum was an artefact of the earlier look-ahead leak; with
+    leak-free features the tuned optimum is unlimited trees + ``max_features=0.3``.
+    """
+    params = dict(learning_rate=0.03, max_iter=200, max_leaf_nodes=None,
+                  min_samples_leaf=20, max_features=0.3,
+                  l2_regularization=1.0, random_state=0)
+    params.update(kwargs)
+    return HistGradientBoostingRegressor(**params)
 
 
 def ensure_features(table: pd.DataFrame) -> pd.DataFrame:

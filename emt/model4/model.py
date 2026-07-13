@@ -45,8 +45,11 @@ FEATURES = [SMIPS_COL, *TERRAIN_VARS, "doy_sin", "doy_cos",
 
 
 def build_estimator(**kwargs) -> HistGradientBoostingRegressor:
-    """Heavily regularised boosting: tiny trees (3 leaves), slow learning."""
-    params = dict(learning_rate=0.03, max_iter=800, max_leaf_nodes=3,
+    """Boosting config for model4's feature set (small trees + heavy leaf/feature
+    regularisation), selected by GroupKFold-on-station tuning on the corrected
+    lookback features (leave-site-out NSE 0.31 on 36 stations)."""
+    params = dict(learning_rate=0.03, max_iter=300, max_leaf_nodes=3,
+                  min_samples_leaf=150, max_features=0.5,
                   l2_regularization=1.0, random_state=0)
     params.update(kwargs)
     return HistGradientBoostingRegressor(**params)

@@ -16,7 +16,7 @@ the per-station PaddockTS :class:`Query` (so everything is cached on disk).
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
@@ -29,10 +29,12 @@ from emt.covariates import terrain_covariates, sample_points, TERRAIN_VARS
 
 SMIPS_COL = "smips_totalbucket"
 
-# SMIPS pixel-climatology features (see add_smips_climatology). Derived from
-# SMIPS alone, so they are available at every pixel at inference -- unlike
-# station identity, they leak nothing about the in-situ target.
-CLIM_VARS = ("smips_mean_px", "smips_std_px", "smips_anom", "smips_z")
+# SMIPS lookback features (see add_smips_climatology): trailing means of the
+# pixel's SMIPS over the past 7 / 30 / 365 days (windows matching the antecedent
+# meteorology), plus today's departure from the past-year level. All are
+# backward-looking (no future), SMIPS-only (available at every pixel, leak
+# nothing about the in-situ target).
+CLIM_VARS = ("smips_7d", "smips_30d", "smips_365d", "smips_anom")
 
 # Stations within this lon/lat span share one SMIPS cube ("cluster fetch": one
 # WCS request per day for the whole cluster instead of one per station). Wider
@@ -51,32 +53,59 @@ def add_temporal_features(df: pd.DataFrame, time_col: str = "time") -> pd.DataFr
 
 # Minimum prior days before an as-of-date climatology is defined.
 CLIM_MIN_DAYS = 90
+# Real SMIPS data begins ~2005; seed the as-of-date climatology from here so the
+# early study period is defined from genuine prior history (not discarded).
+CLIM_SEED_START = date(2005, 1, 1)
 
 
-def add_smips_climatology(table: pd.DataFrame,
-                          seed_series: dict | None = None) -> pd.DataFrame:
-    """Add **as-of-date** SMIPS pixel-climatology features (``CLIM_VARS``).
+def _climatology_seed(table: pd.DataFrame, seed_start: date) -> dict:
+    """Per-station daily SMIPS for [seed_start, study_start), via cluster-fetch.
 
-    The climatology is the mean/std of the pixel's SMIPS *strictly before* the
-    current day (an expanding window shifted by one), so a prediction for day
-    *t* never sees SMIPS from day *t* or any later day:
-
-        smips_mean_px, smips_std_px   SMIPS mean/std over all days before *t*
-        smips_anom                    today's SMIPS minus that past mean
-        smips_z                       the anomaly in past standard deviations
-
-    This is the leak-free form. An earlier version used the **full-period**
-    mean/std, which let each day peek at the rest of the record (including its
-    own future) — it inflated leave-site-out skill by ≈0.14 NSE and is fixed
-    here. The features remain SMIPS-only (no in-situ, cannot memorise station
-    identity) and are computable at any pixel from the SMIPS archive.
-
-    ``seed_series``: optional ``{station: daily SMIPS Series}`` covering the
-    period *before* the table's start, prepended so the early-period climatology
-    is defined from real prior SMIPS history rather than dropping out. Without a
-    seed the first ``CLIM_MIN_DAYS`` of each station's record have an undefined
-    climatology (NaN) and are excluded downstream.
+    Real prior SMIPS history used to seed the as-of-date climatology so no
+    early-period rows are dropped. Returns ``{station: daily SMIPS Series}``.
     """
+    if "lat" not in table.columns:
+        return {}
+    coords = (table.drop_duplicates("station")[["station", "site", "lat", "lon"]]
+              .dropna(subset=["lat", "lon"]))
+    study_start = pd.to_datetime(table["time"]).min().date()
+    if not len(coords) or seed_start >= study_start:
+        return {}
+    seed_end = study_start - timedelta(days=1)
+    seed: dict = {}
+    for group in _partition_clusters(coords):
+        try:
+            seed.update(_cluster_smips(group, seed_start, seed_end, "totalbucket"))
+        except Exception as e:                        # noqa: BLE001
+            print(f"  clim-seed {list(group.station)}: skip ({type(e).__name__})",
+                  flush=True)
+    return seed
+
+
+def add_smips_climatology(table: pd.DataFrame, seed_series: dict | None = None,
+                          seed_start: date | None = CLIM_SEED_START) -> pd.DataFrame:
+    """Add **lookback** SMIPS features (``CLIM_VARS``) per station.
+
+    Trailing means of the pixel's SMIPS over the past 7 / 30 / 365 days (windows
+    matching the antecedent meteorology), plus today's departure from the
+    past-year level. Every window looks strictly backward, so a prediction for
+    day *t* never sees SMIPS from any later day:
+
+        smips_7d, smips_30d, smips_365d   mean SMIPS over the past 7 / 30 / 365 d
+        smips_anom                        today's SMIPS minus smips_365d
+
+    An earlier version used the **full-period** mean/std, which let each day peek
+    at the rest of the record (its own future) — it inflated leave-site-out skill
+    by ≈0.13 NSE and is fixed here. The features remain SMIPS-only (no in-situ,
+    cannot memorise station identity) and are computable at any pixel.
+
+    ``seed_series``: ``{station: daily SMIPS Series}`` for the period *before*
+    the table's start, prepended so the 365-day window is defined from real prior
+    SMIPS history rather than dropping the first study year. Fetched automatically
+    from ``seed_start`` (2005) when not supplied.
+    """
+    if seed_series is None and seed_start is not None:
+        seed_series = _climatology_seed(table, seed_start)
     t = table.copy()
     t["time"] = pd.to_datetime(t["time"])
     out = []
@@ -88,13 +117,13 @@ def add_smips_climatology(table: pd.DataFrame,
         if seed_series is not None and stn in seed_series:
             seed = seed_series[stn]
             s = pd.concat([seed[seed.index < s.index.min()], s]).sort_index()
-        past = s.shift(1)                   # strictly before today (no self-view)
-        mean = past.expanding(min_periods=CLIM_MIN_DAYS).mean()
-        std = past.expanding(min_periods=CLIM_MIN_DAYS).std()
-        g["smips_mean_px"] = g.index.map(mean)
-        g["smips_std_px"] = g.index.map(std)
-        g["smips_anom"] = g[SMIPS_COL] - g["smips_mean_px"]
-        g["smips_z"] = g["smips_anom"] / g["smips_std_px"]
+        r7 = s.rolling(7, min_periods=4).mean()
+        r30 = s.rolling(30, min_periods=15).mean()
+        r365 = s.rolling(365, min_periods=180).mean()
+        g["smips_7d"] = g.index.map(r7)
+        g["smips_30d"] = g.index.map(r30)
+        g["smips_365d"] = g.index.map(r365)
+        g["smips_anom"] = g[SMIPS_COL] - g["smips_365d"]
         out.append(g.reset_index(names="time"))
     return pd.concat(out, ignore_index=True)
 
