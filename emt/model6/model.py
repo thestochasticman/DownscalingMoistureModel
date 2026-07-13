@@ -42,10 +42,15 @@ def build_estimator(**kwargs) -> HistGradientBoostingRegressor:
 
     Note the contrast with model4's ``max_leaf_nodes=3``: that extreme-
     regularisation optimum was an artefact of the earlier look-ahead leak; with
-    leak-free features the tuned optimum is unlimited trees + ``max_features=0.3``.
+    leak-free features the tuned optimum is unlimited trees whose variance is
+    controlled by aggressive per-split feature subsampling. A single-parameter
+    grouped-CV sweep found skill flat for ``max_features`` in 0.15-0.3 and
+    collapsing above 0.3; ``0.15`` (4 of 25 features per split) is the grouped-CV
+    and leave-site-out peak (LOSO NSE 0.40; grouped-CV, which holds out more
+    stations, is a more conservative 0.25).
     """
     params = dict(learning_rate=0.03, max_iter=200, max_leaf_nodes=None,
-                  min_samples_leaf=20, max_features=0.3,
+                  min_samples_leaf=20, max_features=0.15,
                   l2_regularization=1.0, random_state=0)
     params.update(kwargs)
     return HistGradientBoostingRegressor(**params)
