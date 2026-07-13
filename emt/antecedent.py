@@ -49,7 +49,11 @@ def _trailing(silo: pd.DataFrame) -> pd.DataFrame:
         "ppet_365": ppet.rolling(365, min_periods=180).sum(),
         "vpd_30":   vpd.rolling(30,   min_periods=15).mean(),
     })
-    out["rain_365_anom"] = out["rain_365"] - out["rain_365"].mean()
+    # As-of-date drought anomaly: this year's 365-day rain minus the mean of all
+    # PRIOR days' 365-day totals (expanding, shifted) -- never the full-period
+    # mean, which would peek at the future.
+    past_mean = out["rain_365"].shift(1).expanding(min_periods=180).mean()
+    out["rain_365_anom"] = out["rain_365"] - past_mean
     return out.reset_index()
 
 

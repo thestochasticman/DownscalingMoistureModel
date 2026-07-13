@@ -49,22 +49,33 @@ def add_temporal_features(df: pd.DataFrame, time_col: str = "time") -> pd.DataFr
     return df
 
 
-def add_smips_climatology(table: pd.DataFrame) -> pd.DataFrame:
-    """Add SMIPS pixel-climatology features (``CLIM_VARS``) per station.
+# Minimum prior days before an as-of-date climatology is defined.
+CLIM_MIN_DAYS = 90
 
-    For each station's SMIPS series (daily-reindexed, short gaps interpolated):
 
-        smips_mean_px, smips_std_px   long-term mean/std of the pixel's SMIPS
-        smips_anom                    today's SMIPS minus the pixel mean
-        smips_z                       the anomaly in pixel standard deviations
+def add_smips_climatology(table: pd.DataFrame,
+                          seed_series: dict | None = None) -> pd.DataFrame:
+    """Add **as-of-date** SMIPS pixel-climatology features (``CLIM_VARS``).
 
-    This factors the coarse predictor into a static *level* (the pixel's
-    climatology -- a proxy for the local moisture baseline) and a dynamic
-    *departure*. Both are functions of SMIPS only, so they are computable at
-    every 30 m pixel at inference (from the pixel's SMIPS record) and carry no
-    in-situ information -- unlike per-site covariates, they cannot memorise
-    station identity. Empirically this is the largest single skill lever found
-    (see handout).
+    The climatology is the mean/std of the pixel's SMIPS *strictly before* the
+    current day (an expanding window shifted by one), so a prediction for day
+    *t* never sees SMIPS from day *t* or any later day:
+
+        smips_mean_px, smips_std_px   SMIPS mean/std over all days before *t*
+        smips_anom                    today's SMIPS minus that past mean
+        smips_z                       the anomaly in past standard deviations
+
+    This is the leak-free form. An earlier version used the **full-period**
+    mean/std, which let each day peek at the rest of the record (including its
+    own future) — it inflated leave-site-out skill by ≈0.14 NSE and is fixed
+    here. The features remain SMIPS-only (no in-situ, cannot memorise station
+    identity) and are computable at any pixel from the SMIPS archive.
+
+    ``seed_series``: optional ``{station: daily SMIPS Series}`` covering the
+    period *before* the table's start, prepended so the early-period climatology
+    is defined from real prior SMIPS history rather than dropping out. Without a
+    seed the first ``CLIM_MIN_DAYS`` of each station's record have an undefined
+    climatology (NaN) and are excluded downstream.
     """
     t = table.copy()
     t["time"] = pd.to_datetime(t["time"])
@@ -74,8 +85,14 @@ def add_smips_climatology(table: pd.DataFrame) -> pd.DataFrame:
         s = g[SMIPS_COL].reindex(
             pd.date_range(g.index.min(), g.index.max(), freq="D"))
         s = s.interpolate(limit=7)          # bridge short gaps only
-        g["smips_mean_px"] = s.mean()
-        g["smips_std_px"] = s.std()
+        if seed_series is not None and stn in seed_series:
+            seed = seed_series[stn]
+            s = pd.concat([seed[seed.index < s.index.min()], s]).sort_index()
+        past = s.shift(1)                   # strictly before today (no self-view)
+        mean = past.expanding(min_periods=CLIM_MIN_DAYS).mean()
+        std = past.expanding(min_periods=CLIM_MIN_DAYS).std()
+        g["smips_mean_px"] = g.index.map(mean)
+        g["smips_std_px"] = g.index.map(std)
         g["smips_anom"] = g[SMIPS_COL] - g["smips_mean_px"]
         g["smips_z"] = g["smips_anom"] / g["smips_std_px"]
         out.append(g.reset_index(names="time"))

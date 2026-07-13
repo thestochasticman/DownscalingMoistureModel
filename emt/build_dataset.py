@@ -25,8 +25,7 @@ import pandas as pd
 
 from emt.insitu.oznet import fetch_manifest, load_daily_rootzone
 from emt.insitu.coordinates import COORDS_CACHE
-from emt.features import (build_training_table, add_smips_climatology,
-                          add_soil_covariates, SMIPS_COL, CLIM_VARS)
+from emt.features import build_training_table, add_soil_covariates, SMIPS_COL
 from emt.covariates import TERRAIN_VARS
 from emt.slga import SOIL_VARS
 
@@ -36,9 +35,12 @@ SITE_OF_PREFIX = {"A": "ADELONG", "K": "KYEAMBA", "Y": "YANCO", "M": "MURRUMBIDG
 DEFAULT_OUT = "data/train_catchment_plus_m_2006_2010.csv"
 DEFAULT_START, DEFAULT_END = date(2006, 1, 1), date(2010, 12, 31)
 
+# SMIPS climatology (CLIM_VARS) is deliberately NOT baked in: it is an
+# as-of-date expanding statistic, so it is always recomputed fresh from the
+# raw SMIPS column by each model's ``ensure_features`` (baking it once risked
+# serving a stale/leaky version). Soil is static and safe to bake.
 FINAL_COLS = (["site", "station", "time", "lat", "lon", "sm_rootzone_pct", SMIPS_COL]
-              + list(TERRAIN_VARS) + ["doy_sin", "doy_cos"]
-              + list(CLIM_VARS) + list(SOIL_VARS))
+              + list(TERRAIN_VARS) + ["doy_sin", "doy_cos"] + list(SOIL_VARS))
 
 
 def site_of(station: str) -> str | None:
@@ -74,8 +76,7 @@ def build(stations: list[str] | None = None, start: date = DEFAULT_START,
               f"({daily['station'].nunique()} stations)", flush=True)
 
     tab = build_training_table(coords, daily, start, end, verbose=verbose)
-    tab = add_smips_climatology(tab)                       # SMIPS level/anomaly
-    tab = add_soil_covariates(tab, coords, start, end)     # SLGA soil
+    tab = add_soil_covariates(tab, coords, start, end)     # SLGA soil (static)
     tab = tab[[c for c in FINAL_COLS if c in tab.columns]]
 
     if out:
