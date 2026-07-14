@@ -21,7 +21,14 @@ it as indicative, not calibrated.
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import date as _date
+
+# The 30 m terrain COGs live on the PUBLIC Copernicus-DEM open-data bucket
+# (copernicus-dem-30m). Read it anonymously so the tool needs no AWS setup and
+# never trips over a stale/expired local AWS profile. setdefault lets a user who
+# genuinely needs signed access override with AWS_NO_SIGN_REQUEST=NO.
+os.environ.setdefault("AWS_NO_SIGN_REQUEST", "YES")
 
 import numpy as np
 import pandas as pd

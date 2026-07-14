@@ -123,7 +123,7 @@ conda activate paddockts
 | SMIPS + its lookback | TERN GeoServer WCS | nothing (public) |
 | Soil (SLGA) | TERN | a TERN API key |
 | Antecedent weather | SILO / DataDrill | an email address |
-| 30 m terrain | Copernicus DEM (on AWS) | working AWS credentials (`aws sso login` / a configured profile) |
+| 30 m terrain | Copernicus DEM (public AWS bucket) | nothing (read anonymously) |
 
 **3 · Run.** From the repo root, either the CLI —
 
