@@ -29,6 +29,21 @@ pooled +0.38 alongside the conservative grouped-CV (≈+0.25) and the still-nega
 per-station median: model6 tracks *dynamics* well (median per-station r 0.81) but
 the per-station *level* bias is reduced, not solved.
 
+## Feature importance
+
+![model6 feature importance](../figures/model6_importance.png)
+
+Permutation importance ([`plot_model6_importance.py`](../plot_model6_importance.py))
+on the honest lookback features. With the look-ahead removed, **SLGA soil
+dominates** (`soil_sand`, `soil_clay`) — it now carries most of the static
+between-site *level* signal the leaky SMIPS-climatology used to supply. Terrain
+(`slope`, `elevation`), the SMIPS lookback (`smips_7d`, `smips_totalbucket`,
+`smips_anom`) and antecedent water balance (`rain_365`, `ppet_365`) follow. Worth
+noting: soil being top is a double-edged result — it is also the feature most
+likely to behave as a per-station identifier (see
+[`slga.py`](slga.py.md)), so its dominance is a reason the per-station level bias
+is reduced but not solved.
+
 ## Why antecedent meteorology
 
 Soil moisture is set by how much water has recently arrived versus left. The
