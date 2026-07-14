@@ -15,6 +15,14 @@ downscaled field.
 **Result: a genuine tradeoff, and model5 is not recommended.** Smoothing does
 clean the map, but at a steep, monotonic cost to cross-validated skill.
 
+> **Note (evaluation correction):** the leave-site-out figures on this page
+> (the σ-sweep starting from "0.354 = model4") were computed with the earlier
+> **look-ahead SMIPS-climatology features** and are inflated; see
+> [Evaluation correction](../README.md#evaluation-correction). The *conclusion* —
+> that blurring soil trades per-station skill for map smoothness, monotonically —
+> is a relative comparison and is unaffected; the absolute NSE values are pending
+> re-derivation on the corrected features.
+
 ## The map improves…
 
 On the leave-Yanco-out demonstration
