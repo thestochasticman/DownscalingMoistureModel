@@ -17,16 +17,16 @@ model4 features + rain_7/30/365 + ppet_30/365 + vpd_30 + rain_365_anom
 
 | Metric (36 stations, 2006–2010, leave-site-out) | model4 | **model6** |
 |---|---|---|
-| Pooled NSE / r | 0.31 / 0.58 | **0.40 / 0.63** |
-| Median per-station NSE | −0.57 | **−0.14** |
-| Median per-station \|bias\| | 4.88 % | **3.86 %** |
-| Per-station NSE > 0 | 10/36 | **13/36** |
+| Pooled NSE / r | 0.31 / 0.58 | **0.38 / 0.62** |
+| Median per-station NSE | −0.57 | **−0.19** |
+| Median per-station \|bias\| | 4.88 % | **3.85 %** |
+| Per-station NSE > 0 | 10/36 | **16/36** |
 
 These are the leak-free numbers (see the
 [Evaluation correction](../README.md#evaluation-correction)); an earlier version
 reported ~0.39 from a look-ahead in the SMIPS-climatology features. Read the
-pooled +0.40 alongside the conservative grouped-CV (+0.25) and the still-negative
-per-station median: model6 tracks *dynamics* well (median per-station r 0.82) but
+pooled +0.38 alongside the conservative grouped-CV (≈+0.25) and the still-negative
+per-station median: model6 tracks *dynamics* well (median per-station r 0.81) but
 the per-station *level* bias is reduced, not solved.
 
 ## Why antecedent meteorology
@@ -50,9 +50,13 @@ station, never on the leave-site-out score):
 
 | | model4 | model6 |
 |---|---|---|
-| `max_leaf_nodes` | 3 (tiny trees) | **None** (unlimited) |
+| `max_leaf_nodes` | 3 (tiny trees) | **127** (large trees) |
 | `max_features` | 0.5 | **0.15** (heavy per-split subsampling) |
 | `min_samples_leaf` | 150 | 20 |
+
+(The tuned optimum is *unlimited* trees — LOSO 0.40 — but one cross-validation of
+that takes ~90 min; the production config caps `max_leaf_nodes` at 127, giving
+0.377 at ~1/8 the cost, so the model is actually usable.)
 
 The `max_leaf_nodes=3` "extreme regularisation" that looked optimal in the earlier
 (leaky) analysis was an **artefact of the leak** — tiny trees couldn't overfit the

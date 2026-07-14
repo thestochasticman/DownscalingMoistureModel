@@ -46,7 +46,7 @@ then apply it. Each item links to a self-contained page.
 | 10 | [model3 · Gradient boosting](modules/model3.md) | Stock-boosting reference |
 | 11 | [model4 · SMIPS lookback + soil](modules/model4.md) | +0.17 (30-stn) → +0.31 (with M-sites) |
 | 12 | [model5 · Soil smoothing](modules/model5.md) | A documented tradeoff, not recommended |
-| 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + weather (pooled NSE +0.40) |
+| 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + weather (pooled NSE +0.38) |
 
 **3 · Applying the model**
 
@@ -81,16 +81,16 @@ stations but one, predict the unseen one):
 
 | Skill (36 stations, 2006–2010, leave-site-out) | model6 |
 |---|---|
-| Pooled NSE / r | **+0.40 / 0.63** |
-| Median per-station \|bias\| | 3.86 % |
-| Per-station NSE > 0 | 13/36 |
-| Median per-station NSE | −0.14 |
+| Pooled NSE / r | **+0.38 / 0.62** |
+| Median per-station \|bias\| | 3.85 % |
+| Per-station NSE > 0 | 16/36 |
+| Median per-station NSE | −0.19 |
 
-**Read the pooled +0.40 with care.** It is the leave-*one*-station-out figure;
+**Read the pooled +0.38 with care.** It is the leave-*one*-station-out figure;
 the more demanding grouped cross-validation (holding out ~7 stations at once)
-gives a conservative **+0.25**, and the *per-station* NSE is still negative at
-most sites (median −0.14). The model tracks moisture *dynamics* well (median
-per-station r 0.82) but a per-station *level* bias remains — it is **not** a
+gives a conservative **≈+0.25**, and the *per-station* NSE is still negative at
+most sites (median −0.19). The model tracks moisture *dynamics* well (median
+per-station r 0.81) but a per-station *level* bias remains — it is **not** a
 solved product. An earlier version of this handout reported inflated skill from a
 look-ahead leak in the SMIPS-climatology features; see
 [Evaluation correction](#evaluation-correction).
@@ -121,7 +121,9 @@ re-analysis:
 - **The leaky-era "extreme regularisation" tuning was itself an artefact.** With
   leak-free features the optimum flips from tiny trees to large trees controlled
   by feature subsampling (`max_features=0.15`); proper tuning then recovers pooled
-  NSE ≈0.40 — matching the retracted headline, but legitimately.
+  NSE **≈0.38–0.40** — close to the retracted headline, but legitimately. (The
+  unlimited-tree optimum scores 0.40 but takes ~90 min per cross-validation, so
+  the production config caps trees at 127 for 0.377 at ~1/8 the cost.)
 
 ## Training table (inputs and target)
 

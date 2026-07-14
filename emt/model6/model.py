@@ -45,11 +45,14 @@ def build_estimator(**kwargs) -> HistGradientBoostingRegressor:
     leak-free features the tuned optimum is unlimited trees whose variance is
     controlled by aggressive per-split feature subsampling. A single-parameter
     grouped-CV sweep found skill flat for ``max_features`` in 0.15-0.3 and
-    collapsing above 0.3; ``0.15`` (4 of 25 features per split) is the grouped-CV
-    and leave-site-out peak (LOSO NSE 0.40; grouped-CV, which holds out more
-    stations, is a more conservative 0.25).
+    collapsing above 0.3; ``0.15`` (4 of 25 features per split) is the peak.
+
+    ``max_leaf_nodes`` is **capped at 127** rather than unlimited: unlimited trees
+    scored marginally higher (~0.02-0.03 grouped-CV, LOSO ~0.40) but one
+    leave-site-out pass took ~90 min — impractical to cross-validate. The cap
+    keeps almost all the skill while making a LOSO ~5-8x faster.
     """
-    params = dict(learning_rate=0.03, max_iter=200, max_leaf_nodes=None,
+    params = dict(learning_rate=0.03, max_iter=200, max_leaf_nodes=127,
                   min_samples_leaf=20, max_features=0.15,
                   l2_regularization=1.0, random_state=0)
     params.update(kwargs)
