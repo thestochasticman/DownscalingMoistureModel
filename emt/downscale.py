@@ -103,3 +103,4 @@ def downscale(model, query: Query, day: date | str, features: list[str],
         coords=grid.coords,
     )
     return ds.rio.write_crs(grid.rio.crs)
+                            

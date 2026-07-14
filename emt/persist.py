@@ -35,6 +35,38 @@ def load_model(name: str):
     return joblib.load(p) if p.exists() else None
 
 
+def loso_cached(module, table, name: str, reload: bool = False, verbose: bool = True):
+    """Leave-site-out out-of-fold predictions for ``module``, computed once.
+
+    Returns a DataFrame ``[station, time, <target>, pred]`` and caches it to
+    ``data/<name>_loso_predictions.csv`` so figures never re-run the CV. Prints
+    per-station progress on the first (uncached) run.
+    """
+    import numpy as np
+    import pandas as pd
+
+    path = Path(f"data/{name}_loso_predictions.csv")
+    if not reload and path.exists():
+        return pd.read_csv(path, parse_dates=["time"])
+
+    target = module.TARGET
+    sub = (module.ensure_features(table)
+           .dropna(subset=list(module.FEATURES) + [target]).reset_index(drop=True))
+    sub["time"] = pd.to_datetime(sub["time"])
+    out = sub[["station", "time", target]].copy()
+    out["pred"] = np.nan
+    stations = list(sub["station"].unique())
+    for i, stn in enumerate(stations, 1):
+        te = (sub["station"] == stn).values
+        est = module.build_estimator()
+        est.fit(sub.loc[~te, module.FEATURES], sub.loc[~te, target])
+        out.loc[te, "pred"] = est.predict(sub.loc[te, module.FEATURES])
+        if verbose:
+            print(f"  {name} LOSO [{i}/{len(stations)}] {stn}", flush=True)
+    out.to_csv(path, index=False)
+    return out
+
+
 def fit_cached(module, table, name: str, reload: bool = False):
     """Load the cached fit of ``module`` named ``name``; fit + save if absent.
 
