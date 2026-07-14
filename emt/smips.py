@@ -177,6 +177,32 @@ def download_smips(query: Query, var: str = "totalbucket", workers: int = 8,
     return cube
 
 
+def smips_lookback_day(query: Query, day, var: str = "totalbucket",
+                       windows=(7, 30, 365), workers: int = 8) -> dict:
+    """SMIPS lookback rasters over the AOI, as of ``day`` (for inference).
+
+    Fetches the SMIPS cube for ``[day - max(windows), day]`` over ``query.bbox``
+    and returns the trailing means ending at ``day`` — the inference-side match to
+    the training features ``smips_7d/30d/365d`` — plus ``smips_totalbucket`` (the
+    day's value) and ``smips_anom`` (day minus the past-year mean). Every window
+    looks strictly backward from ``day``.
+
+    Returns ``{name: DataArray}`` on the SMIPS grid (EPSG:4326), ready for
+    ``downscale``/``predict`` ``extra_layers``.
+    """
+    day = pd.Timestamp(day)
+    start = (day - pd.Timedelta(days=max(windows))).date()
+    cube = smips_cube(start, day.date(), tuple(query.bbox), var=var,
+                      workers=workers).sortby("time")
+    out = {}
+    for w in windows:
+        out[f"smips_{w}d"] = cube.isel(time=slice(-w, None)).mean("time")
+    today = cube.isel(time=-1)                     # nearest available day <= day
+    out["smips_totalbucket"] = today
+    out["smips_anom"] = today - out["smips_365d"]
+    return {k: v.rio.write_crs(4326) for k, v in out.items()}
+
+
 def smips_climatology(query: Query, var: str = "totalbucket", step_days: int = 5,
                       workers: int = 8, reload: bool = False) -> xr.Dataset:
     """Per-pixel SMIPS mean/std over the query period (the model4 level features).

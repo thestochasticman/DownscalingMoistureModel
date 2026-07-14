@@ -99,6 +99,61 @@ How this model was arrived at is documented across the model pages
 ([model1](modules/model1.md) → [model6](modules/model6.md)); the 30 m product it
 generates is on the [downscaling page](modules/downscale.py.md).
 
+## Use the model
+
+The trained model ships in the repo (`data/models/model6.joblib`), so you can
+produce a 30 m map for any Australian area and day **without retraining** — the
+tool fetches every covariate for you and predicts per pixel.
+
+**1 · Install.** Clone this repo and
+[PaddockTS](https://github.com/thestochasticman/paddock-ts-local) side by side,
+and use the `paddockts` conda environment (it has rioxarray, scikit-learn, etc.):
+
+```bash
+git clone git@github.com:thestochasticman/DownscalingMoistureModel.git
+git clone git@github.com:thestochasticman/paddock-ts-local.git
+conda activate paddockts
+```
+
+**2 · Credentials.** Three covariate sources need free accounts (put keys in
+`~/.config/PaddockTS.json` as PaddockTS documents):
+
+| Covariate | Source | Needs |
+|---|---|---|
+| SMIPS + its lookback | TERN GeoServer WCS | nothing (public) |
+| Soil (SLGA) | TERN | a TERN API key |
+| Antecedent weather | SILO / DataDrill | an email address |
+| 30 m terrain | Copernicus DEM (on AWS) | working AWS credentials (`aws sso login` / a configured profile) |
+
+**3 · Run.** From the repo root, either the CLI —
+
+```bash
+PYTHONPATH=. python -m emt.predict \
+    --bbox 147.30 -35.52 147.62 -35.10 \
+    --date 2008-07-31 \
+    -o soil_moisture_30m.tif
+```
+
+— or the Python function:
+
+```python
+from emt.predict import predict
+ds = predict(bbox=(147.30, -35.52, 147.62, -35.10), day="2008-07-31")
+ds["sm_pred"]                      # xr.DataArray, 30 m root-zone soil moisture (%)
+ds["sm_pred"].rio.to_raster("soil_moisture_30m.tif")
+```
+
+`--bbox` is `W S E N` in EPSG:4326; the output is a single-band GeoTIFF on the
+30 m Copernicus-DEM grid. A first run over a new area fetches ~a year of SMIPS and
+SILO (a few minutes); everything is cached under the AOI stub for subsequent days.
+
+> **Caveat — Murrumbidgee-trained, unvalidated elsewhere.** The shipped model is
+> trained and validated only in the Murrumbidgee catchment. Run anywhere else and
+> it will still produce a field, but with an uncorrected per-site level bias and
+> no out-of-region validation (see the [skill caveats](#the-model) above). Treat
+> off-catchment output as **indicative, not calibrated** — the tool prints this
+> warning on every run.
+
 ## Evaluation correction
 
 An earlier version of this work computed the SMIPS "climatology" features

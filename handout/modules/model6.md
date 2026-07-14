@@ -95,9 +95,12 @@ collapsing above 0.3).
 
 model6 is the **recommended** model — it beats [`model4`](model4.md) on every
 leave-site-out metric on the 36-station set. It is not a finished product: the
-per-station level bias persists (see the README). Inference needs the SILO
-antecedent rasters over the AOI in addition to model4's SMIPS-lookback and soil
-layers (the inference path is being updated to the lookback features).
+per-station level bias persists (see the README). The trained estimator ships in
+the repo (`data/models/model6.joblib`) and is applied to any AOI/day by
+[`emt/predict.py`](../../emt/predict.py) — `python -m emt.predict --bbox W S E N
+--date YYYY-MM-DD` — which fetches the SMIPS lookback, soil and SILO antecedent
+rasters over the AOI and predicts per 30 m pixel (see
+[Use the model](../README.md#use-the-model)).
 
 ---
 <!-- NAV -->
