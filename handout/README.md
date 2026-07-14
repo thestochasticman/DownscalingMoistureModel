@@ -44,9 +44,9 @@ then apply it. Each item links to a self-contained page.
 | 8 | [model1 · Random Forest](modules/model1.md) | Baseline (pooled NSE +0.15) |
 | 9 | [model2 · Linear](modules/model2.md) | Interpretable comparison |
 | 10 | [model3 · Gradient boosting](modules/model3.md) | Stock-boosting reference |
-| 11 | [model4 · Climatology + soil](modules/model4.md) | The improved model (pooled NSE +0.37) |
+| 11 | [model4 · SMIPS lookback + soil](modules/model4.md) | +0.17 (30-stn) → +0.31 (with M-sites) |
 | 12 | [model5 · Soil smoothing](modules/model5.md) | A documented tradeoff, not recommended |
-| 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + climate (pooled NSE +0.39) |
+| 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + weather (pooled NSE +0.40) |
 
 **3 · Applying the model**
 
@@ -64,8 +64,8 @@ from the coarse SMIPS value and a set of fine, national covariates —
 sm_rootzone_pct  ~  smips_totalbucket                        (coarse predictor, mm)
                   + elevation, slope, northness, eastness,
                     twi, hli, accumulation                    (30 m terrain)
-                  + smips_mean_px, smips_std_px,
-                    smips_anom, smips_z                       (SMIPS pixel climatology)
+                  + smips_7d, smips_30d, smips_365d,
+                    smips_anom                                (SMIPS lookback: past 7/30/365-day means)
                   + soil_clay, soil_sand, soil_awc, soil_bdw  (SLGA soil)
                   + rain_7/30/365, ppet_30/365, vpd_30,
                     rain_365_anom                             (antecedent SILO weather)
@@ -74,20 +74,54 @@ sm_rootzone_pct  ~  smips_totalbucket                        (coarse predictor, 
 
 Every predictor is a gridded product available at any Australian pixel; the
 in-situ observation is used **only** as the training label and the validation
-reference, never as a model input. Reported skill is the held-out
-leave-site-out estimate (train on all stations but one, predict the unseen one):
+reference, never as a model input. Every SMIPS/soil/weather statistic is
+**backward-looking** (as of the prediction day), so no feature can see the
+future. Reported skill is the held-out leave-site-out estimate (train on all
+stations but one, predict the unseen one):
 
 | Skill (36 stations, 2006–2010, leave-site-out) | model6 |
 |---|---|
-| Pooled NSE / r | **+0.39 / 0.64** |
-| Median per-station \|bias\| | 3.16 % |
-| Per-station NSE > 0 | 17/36 |
+| Pooled NSE / r | **+0.40 / 0.63** |
+| Median per-station \|bias\| | 3.86 % |
+| Per-station NSE > 0 | 13/36 |
+| Median per-station NSE | −0.14 |
 
-How this model was arrived at — the baseline, the diagnosis of the residual as a
-site-level *bias*, and the feature/estimator changes that reduced it — is
-documented across the model pages ([model1](modules/model1.md) →
-[model6](modules/model6.md)); the 30 m product it generates is on the
-[downscaling page](modules/downscale.py.md).
+**Read the pooled +0.40 with care.** It is the leave-*one*-station-out figure;
+the more demanding grouped cross-validation (holding out ~7 stations at once)
+gives a conservative **+0.25**, and the *per-station* NSE is still negative at
+most sites (median −0.14). The model tracks moisture *dynamics* well (median
+per-station r 0.82) but a per-station *level* bias remains — it is **not** a
+solved product. An earlier version of this handout reported inflated skill from a
+look-ahead leak in the SMIPS-climatology features; see
+[Evaluation correction](#evaluation-correction).
+
+How this model was arrived at is documented across the model pages
+([model1](modules/model1.md) → [model6](modules/model6.md)); the 30 m product it
+generates is on the [downscaling page](modules/downscale.py.md).
+
+## Evaluation correction
+
+An earlier version of this work computed the SMIPS "climatology" features
+(`smips_mean_px` etc.) as the **full-period** mean/std of each pixel's SMIPS —
+which let every training day peek at the rest of the record, including its own
+future. That look-ahead **inflated the reported leave-site-out NSE by ≈0.13**
+(model6 read 0.39 where the honest figure is ≈0.26 untuned) and made the
+per-station level bias look solved when it was not.
+
+The fix (this version): the SMIPS features are now strictly **lookback** —
+trailing means over the past 7 / 30 / 365 days (`smips_7d/30d/365d`), seeded from
+real pre-2006 SMIPS so nothing is discarded, with the same treatment applied to
+`rain_365_anom`. The estimators were then re-tuned honestly (GroupKFold on
+station, never on the leave-site-out score). Two things came out of the honest
+re-analysis:
+
+- **The features still add real value** — base Random Forest is *negative*
+  (−0.05 on 36 stations); the lookback + soil + antecedent features lift it to
+  +0.40. So the skill is genuine, just to a lower ceiling than the leak implied.
+- **The leaky-era "extreme regularisation" tuning was itself an artefact.** With
+  leak-free features the optimum flips from tiny trees to large trees controlled
+  by feature subsampling (`max_features=0.15`); proper tuning then recovers pooled
+  NSE ≈0.40 — matching the retracted headline, but legitimately.
 
 ## Training table (inputs and target)
 
@@ -95,35 +129,35 @@ One row per station-day. The target is the OzNet root-zone observation; every
 other column is a predictor. Three representative rows — a dry site, a mid site
 and a wet site:
 
-| column | group | dry (M7) | mid (M6) | wet (A3) |
+| column | group | dry (Y3) | mid (Y11) | wet (A5) |
 |---|---|---|---|---|
-| **sm_rootzone_pct** | **target (%)** | **12.5** | **21.5** | **33.9** |
-| smips_totalbucket | coarse (mm) | 6.0 | 0.0 | 77.6 |
-| elevation | terrain (m) | 135 | 91 | 500 |
-| slope | terrain (°) | 0.4 | 0.6 | 11.3 |
-| northness | terrain | −0.99 | 0.65 | −0.75 |
-| eastness | terrain | −0.13 | 0.76 | 0.67 |
-| twi | terrain | 4.9 | 4.5 | 2.7 |
-| hli | terrain | 0.85 | 0.86 | 0.94 |
-| accumulation | terrain | 1 | 1 | 3 |
-| smips_mean_px | SMIPS clim (mm) | 16.7 | 23.8 | 46.2 |
-| smips_std_px | SMIPS clim (mm) | 20.5 | 31.1 | 21.9 |
-| smips_anom | SMIPS clim (mm) | −10.7 | −23.8 | 31.4 |
-| smips_z | SMIPS clim | −0.52 | −0.77 | 1.43 |
-| soil_clay | SLGA (%) | 27.3 | 35.5 | 32.5 |
-| soil_sand | SLGA (%) | 61.7 | 47.3 | 52.1 |
-| soil_awc | SLGA | 11.8 | 9.7 | 12.0 |
-| soil_bdw | SLGA | 1.52 | 1.49 | 1.42 |
-| rain_7 | antecedent (mm) | 2.5 | 0.0 | 148.0 |
-| rain_30 | antecedent (mm) | 11.7 | 5.8 | 274.4 |
-| rain_365 | antecedent (mm) | 299 | 301 | 1188 |
-| ppet_30 | antecedent (mm) | −60.6 | −82.7 | 224.1 |
-| ppet_365 | antecedent (mm) | −1915 | −1819 | −509 |
-| vpd_30 | antecedent | 7.1 | 8.4 | 3.4 |
-| rain_365_anom | antecedent (mm) | −5.2 | 27.7 | 403.3 |
-| doy_sin | seasonality | −0.78 | 0.71 | −0.94 |
-| doy_cos | seasonality | −0.62 | −0.71 | −0.35 |
-| *station / site / time* | *identifiers* | *M7 · 2009-08-23* | *M6 · 2006-05-17* | *A3 · 2010-09-10* |
+| **sm_rootzone_pct** | **target (%)** | **12.4** | **21.5** | **33.8** |
+| smips_totalbucket | coarse (mm) | 13.9 | 0.0 | 85.6 |
+| elevation | terrain (m) | 145 | 115 | 377 |
+| slope | terrain (°) | 2.4 | 0.1 | 0.2 |
+| northness | terrain | 0.31 | 0.76 | −0.97 |
+| eastness | terrain | 0.95 | 0.65 | −0.24 |
+| twi | terrain | 6.9 | 6.4 | 9.8 |
+| hli | terrain | 0.89 | 0.84 | 0.84 |
+| accumulation | terrain | 43 | 1 | 65 |
+| smips_7d | SMIPS past-7d mean (mm) | 16.4 | 3.3 | 87.2 |
+| smips_30d | SMIPS past-30d mean (mm) | 13.2 | 0.8 | 83.7 |
+| smips_365d | SMIPS past-year mean (mm) | 25.1 | 8.2 | 60.3 |
+| smips_anom | today − past-year (mm) | −11.2 | −8.2 | 25.3 |
+| soil_clay | SLGA (%) | 28.4 | 38.0 | 32.2 |
+| soil_sand | SLGA (%) | 60.3 | 46.7 | 51.3 |
+| soil_awc | SLGA | 11.0 | 10.8 | 11.0 |
+| soil_bdw | SLGA | 1.52 | 1.50 | 1.44 |
+| rain_7 | antecedent (mm) | 3.0 | 10.9 | 26.3 |
+| rain_30 | antecedent (mm) | 26.7 | 12.1 | 96.4 |
+| rain_365 | antecedent (mm) | 248 | 185 | 833 |
+| ppet_30 | antecedent (mm) | −84 | −292 | 52 |
+| ppet_365 | antecedent (mm) | −2118 | −2044 | −923 |
+| vpd_30 | antecedent | 11.9 | 27.4 | 3.6 |
+| rain_365_anom | antecedent (mm) | −45 | −171 | 175 |
+| doy_sin | seasonality | 0.73 | 0.20 | −0.72 |
+| doy_cos | seasonality | −0.68 | 0.98 | −0.70 |
+| *station / site / time* | *identifiers* | *Y3 · 2007-05-15* | *Y11 · 2007-01-12* | *A5 · 2008-08-16* |
 
 Station coordinates are **not** predictors (they would let the model memorise
 station identity); `station` is used only to group the leave-site-out
