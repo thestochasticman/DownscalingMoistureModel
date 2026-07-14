@@ -29,6 +29,17 @@ pooled +0.38 alongside the conservative grouped-CV (≈+0.25) and the still-nega
 per-station median: model6 tracks *dynamics* well (median per-station r 0.81) but
 the per-station *level* bias is reduced, not solved.
 
+The leave-site-out fit, feature importance, the model4 → model6 per-station NSE
+comparison and the residual bias are in the four-panel
+[`plot_model6_summary.py`](../plot_model6_summary.py) →
+`figures/model6_results.png`; the per-station held-out time series are
+[`plot_model6_results.py`](../plot_model6_results.py) →
+`figures/model6_per_station.png`. Both read cached predictions
+(`data/*_loso_predictions.csv`) and the saved model
+(`data/models/model6.joblib`), so they never re-run the CV.
+
+![model6 results](../figures/model6_results.png)
+
 ## Feature importance
 
 ![model6 feature importance](../figures/model6_importance.png)
