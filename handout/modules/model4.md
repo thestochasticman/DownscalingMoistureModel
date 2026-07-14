@@ -6,62 +6,59 @@
 
 Source: [`../../emt/model4/model.py`](../../emt/model4/model.py)
 
-The product of a systematic improvement search (2026-07-02) over features,
-estimators, weighting, ensembling and problem restructuring — all scored by the
-same leave-site-out harness ([`evaluation.py`](evaluation.py.md)). It more than
-doubles the cross-site skill of [`model1`](model1.md) **and** improves the
-per-station profile at the same time, breaking the tradeoff the earlier models
-were stuck on.
+model4 adds two feature groups to the base predictors — **SMIPS lookback
+windows** and **SLGA soil** — with a tuned boosting estimator. All numbers here
+are the leak-free ones (see the
+[Evaluation correction](../README.md#evaluation-correction)); an earlier version
+reported inflated skill (model4 "0.35, doubling model1") from a look-ahead in the
+SMIPS-climatology features.
 
-| Metric (30 stations, 2006–2010) | model1 (RF) | **model4** |
+| Leave-site-out NSE | model1 (RF, base) | **model4** |
 |---|---|---|
-| Pooled LOSO NSE / r | +0.15 / 0.53 | **+0.35 / 0.62** |
-| Per-station NSE > 0 | 7/30 | **14/30** |
-| Median per-station NSE | −0.56 | **−0.07** |
-| Median per-station r | 0.75 | 0.80 |
-| Leave-region-out NSE | −0.72 | **+0.12** |
+| 30-station (dense catchments) | +0.15 | +0.17 |
+| 36-station (+ regional M-sites) | −0.05 | **+0.31** |
+| 36-station median per-station NSE | −1.01 | −0.57 |
+| 36-station median per-station \|bias\| | 4.84 % | 4.88 % |
 
-The leave-site-out fit, feature importance, the paired model1 → model4
-per-station NSE/bias comparison, and the 30-station held-out time series are
-plotted by [`plot_model4_results.py`](../plot_model4_results.py)
-(`figures/model4_results.png`, `figures/model4_per_station.png`).
+The honest story is different from the leaky one: on the **dense clusters alone**
+model4 barely beats the base Random Forest (+0.17 vs +0.15) — the features need
+spatial spread to pay off. Once the scattered regional
+[M-sites](../README.md#extending-coverage-regional-sites-30--36-stations) broaden
+the set to 36 stations, model1 goes *negative* (−0.05, no features to place the
+new sites) while model4 reaches **+0.31** — so the features add real value, but as
+a function of training coverage, not the "doubling" the leak implied.
 
-**Current default training set: 36 stations.** The table above is the 30-station
-development result. model4's production training set now also includes the six
-scattered regional Murrumbidgee sites (M1–M7), built reproducibly by
-[`emt/build_dataset.py`](../../emt/build_dataset.py) → pooled NSE **+0.368**,
-18/36 stations positive, median per-station NSE −0.01. The estimator and features
-are unchanged; only the data broadened. The recommended model
-([`model6`](model6.md)) adds antecedent-meteorology features on top of this.
+The recommended model ([`model6`](model6.md)) adds antecedent-meteorology on top
+(pooled +0.40). The training table is built by
+[`emt/build_dataset.py`](../../emt/build_dataset.py).
 
 | Function | Role |
 |---|---|
-| `build_estimator(**kw)` | `HistGradientBoostingRegressor(max_leaf_nodes=3, learning_rate=0.03, max_iter=800, l2=1)` |
-| `ensure_features(table)` | Derives climatology + soil columns on a standard table |
+| `build_estimator(**kw)` | Tuned `HistGradientBoostingRegressor` (small trees: `max_leaf_nodes=3, min_samples_leaf=150, max_features=0.5, max_iter=300`) |
+| `ensure_features(table)` | Derives SMIPS lookback + soil columns on a standard table |
 | `fit(table)` / `leave_site_out_cv(table)` | As in the other model packages (features auto-derived) |
 | `feature_importance(model, table)` | Permutation importance |
 
-## The three ingredients
+## The features and estimator
 
-1. **SMIPS pixel climatology** (`smips_mean_px`, `smips_std_px`, `smips_anom`,
-   `smips_z`; [`features.add_smips_climatology`](../../emt/features.py)). The
-   pixel's long-term SMIPS mean/std plus the day's anomaly factor the coarse
-   predictor into a static *level* and a dynamic *departure*. This supplies the
-   local-baseline signal whose absence caused the per-station bias in models
-   1–3 — and because it is derived from SMIPS alone, it is computable at every
-   30 m pixel at inference and cannot memorise stations. Largest single lever:
-   +0.08 pooled NSE on every estimator tested.
-2. **Extreme regularisation.** Pooled skill rises monotonically as boosting
-   trees shrink (`max_leaf_nodes` 31 → 0.20, 15 → 0.25, 8 → 0.28, 6 → 0.29,
-   4 → 0.31, **3 → 0.34**; 2 falls back). Three-leaf trees cannot memorise site
-   quirks, forcing transferable structure. Seed-stable (±0.004 over 3 seeds).
-3. **SLGA soil, rehabilitated** ([`slga.py`](slga.py.md)). With the climatology
-   anchoring the level, the four soil covariates add skill and give the best
-   per-station profile (median −0.07). The earlier
-   negative soil result (soil alone acted as a near-unique station ID and hurt
-   leave-site-out skill; see [`slga.py`](slga.py.md)) was *conditional* on the
-   missing level feature, not absolute: without an anchor soil acts as a station
-   ID; with one, it contributes texture signal.
+1. **SMIPS lookback** (`smips_7d`, `smips_30d`, `smips_365d`, `smips_anom`;
+   [`features.add_smips_climatology`](../../emt/features.py)). Trailing means of
+   the pixel's SMIPS over the past 7 / 30 / 365 days, plus today's departure from
+   the past-year level — the level/departure split that base models 1–3 lack.
+   Strictly backward-looking and SMIPS-only (no in-situ, cannot memorise
+   stations). **Correction:** an earlier *full-period* form of these features saw
+   the future and inflated their apparent contribution (the retracted "+0.08
+   lever"); the honest lookback form helps, but by less.
+2. **SLGA soil** ([`slga.py`](slga.py.md)). With a level signal present the four
+   soil covariates add texture; used *alone* (models 1–3) they acted as a
+   near-unique station ID and hurt leave-site-out skill — a conditional result,
+   not absolute.
+3. **Tuned estimator.** Small trees with heavy leaf/feature regularisation
+   (`max_leaf_nodes=3`, `min_samples_leaf=150`, `max_features=0.5`), selected by
+   GroupKFold-on-station on the leak-free features. The recommended
+   [`model6`](model6.md), with its larger feature set, tunes to the *opposite*
+   (unlimited trees + feature subsampling) — the earlier "tiny trees are always
+   best" conclusion was itself an artefact of the leak, not a general truth.
 
 ## What was tested and did NOT make the cut
 
@@ -79,11 +76,13 @@ are unchanged; only the data broadened. The recommended model
 
 ## The oracle diagnostic
 
-Replacing the model's implicit level with each station's *true* mean (keeping
-the learned anomaly model) yields **NSE 0.83, 28/30 stations positive**. The
-remaining gap (0.35 → 0.83) is almost entirely the site-level baseline, which
-makes the future-work priority precise: more sites buys a better *level* model
-specifically.
+Replacing the model's implicit level with each station's *true* mean (keeping the
+learned anomaly model) yields a large jump in NSE — nearly the whole residual is
+the site-level baseline, which makes the future-work priority precise: more sites
+buys a better *level* model specifically. (The exact figures — "0.83, 28/30" —
+were computed on the leaky features and are pending re-derivation on the corrected
+features; the qualitative conclusion, that the remaining error is level not
+dynamics, holds and is confirmed by the still-negative per-station NSE.)
 
 ## Validation notes
 
@@ -96,21 +95,15 @@ generalise.
 
 ## Inference
 
-Applying model4 per pixel ([`downscale.py`](downscale.py.md)) needs two static
-rasters passed via `extra_layers`: the SMIPS climatology over the AOI
-([`smips.smips_climatology`](../../emt/smips.py), thinned multi-year fetch,
-cached) and the SLGA soil stack ([`slga.soil_covariates`](slga.py.md)).
-`smips_anom`/`smips_z` are derived per pixel inside `downscale` from the day's
-SMIPS and the climatology.
+Applying model4 per pixel ([`downscale.py`](downscale.py.md)) needs the SMIPS
+lookback rasters (the past 7/30/365-day SMIPS means over the AOI, ending at the
+prediction day) and the SLGA soil stack ([`slga.soil_covariates`](slga.py.md)),
+passed via `extra_layers`. **The inference path is being updated** from the old
+full-period climatology (`smips_mean_px`) to these trailing windows; the
+downscaling galleries pre-date the correction and are being regenerated.
 
-Demonstrated end-to-end by
-[`plot_downscale_model4.py`](../plot_downscale_model4.py) (leave-Yanco-out,
-2008-07-31): regional bias improves over model1 (+11.3 → +9.0 %, RMSE 11.5 →
-10.3 %) but the single-day spatial pattern is worse (ubRMSE 2.4 → 4.9 %) — the
-30 m field inherits blocky SLGA map-unit boundaries and mutes some terrain
-detail. The full-record leave-region-out numbers (Yanco NSE −1.81 → −0.44)
-remain the meaningful transfer measure. The soil-texture-vs-per-station-skill
-tension is explored further in [`model5`](model5.md).
+The per-station-skill vs spatial-texture tension the soil covariates introduce is
+explored in [`model5`](model5.md).
 
 ---
 <!-- NAV -->

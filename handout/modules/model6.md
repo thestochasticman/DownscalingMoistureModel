@@ -6,10 +6,10 @@
 
 Source: [`../../emt/model6/model.py`](../../emt/model6/model.py)
 
-The same estimator and features as [`model4`](model4.md), extended with **SILO
-trailing-window meteorology** ([`antecedent.py`](../../emt/antecedent.py)) — how
-much rain has fallen and how the water balance and evaporative demand have run
-over the **last week, month and year**:
+[`model4`](model4.md)'s features extended with **SILO trailing-window
+meteorology** ([`antecedent.py`](../../emt/antecedent.py)) — how much rain has
+fallen and how the water balance and evaporative demand have run over the **past
+week, month and year** — with its **own** tuned estimator:
 
 ```
 model4 features + rain_7/30/365 + ppet_30/365 + vpd_30 + rain_365_anom
@@ -17,49 +17,57 @@ model4 features + rain_7/30/365 + ppet_30/365 + vpd_30 + rain_365_anom
 
 | Metric (36 stations, 2006–2010, leave-site-out) | model4 | **model6** |
 |---|---|---|
-| Pooled NSE / r | 0.368 / 0.628 | **0.393 / 0.644** |
-| Median per-station \|bias\| | 3.36 % | **3.16 %** |
-| Median per-station NSE | −0.01 | −0.03 |
-| Per-station \|bias\| improved | — | **27/36 stations** |
+| Pooled NSE / r | 0.31 / 0.58 | **0.40 / 0.63** |
+| Median per-station NSE | −0.57 | **−0.14** |
+| Median per-station \|bias\| | 4.88 % | **3.86 %** |
+| Per-station NSE > 0 | 10/36 | **13/36** |
 
-| Function | Role |
-|---|---|
-| `build_estimator()` | Same regularised `HistGradientBoostingRegressor` as model4 |
-| `ensure_features(table)` | model4 features (SMIPS climatology + soil) **+** antecedent meteorology |
-| `fit` / `leave_site_out_cv` / `feature_importance` | As in the other model packages |
+These are the leak-free numbers (see the
+[Evaluation correction](../README.md#evaluation-correction)); an earlier version
+reported ~0.39 from a look-ahead in the SMIPS-climatology features. Read the
+pooled +0.40 alongside the conservative grouped-CV (+0.25) and the still-negative
+per-station median: model6 tracks *dynamics* well (median per-station r 0.82) but
+the per-station *level* bias is reduced, not solved.
 
 ## Why antecedent meteorology
 
 Soil moisture is set by how much water has recently arrived versus left. The
-current SMIPS value and the SMIPS pixel-climatology capture the *state* and the
-*long-term level*, but not the **recent accumulation** — chiefly the month-scale
-**water balance** `P − PET` (rain minus potential evapotranspiration). Adding it
-lowers the residual per-station level **bias** (the binding constraint) from
-≈3.9 % to 3.16 %, for a pooled-NSE gain of +0.025. All the features are dynamic
-per-pixel time series drawn from SILO (a national ≈5 km daily grid), so they are
-computable at every 30 m pixel at inference and cannot memorise station identity
-— the same leakage test the other features pass. SILO is fetched one year before
-the study start so the 365-day window is complete at every training date.
+SMIPS value and the SMIPS lookback windows capture the *state* and the *level*,
+but the water balance `P − PET` (rain minus potential evapotranspiration) and
+evaporative demand add recent-accumulation signal SMIPS does not fully separate.
+Adding the antecedent features lifts pooled NSE from 0.31 to 0.40 and cuts the
+median per-station |bias| from 4.9 % to 3.9 % — a real gain even after the leak
+was removed. All are dynamic per-pixel SILO series (national ≈5 km daily grid),
+computable at every 30 m pixel and unable to memorise station identity — the same
+leakage test the other features pass, and every window is strictly backward. SILO
+is fetched one year before the study start so the 365-day window is complete.
 
-## Which window matters — month leads, year helps on the dry sites
+## Its own tuned estimator (opposite of model4)
 
-Permutation importance is led by the **30-day** water balance `ppet_30`, with
-`vpd_30` also contributing — the recent-month accumulation the SMIPS state does
-not separate. The **year** window is more useful here than on the 30-station
-catchment: `rain_365_anom` (this year's rain vs the pixel's normal — a drought
-index) is the *second* antecedent feature on the 36-station set, because the dry,
-drought-exposed western regional M-sites (M1–M7, added to broaden coverage) are
-where multi-year rainfall deficit carries real signal. Correspondingly the gain
-is larger on 36 stations (+0.025 pooled) than on the 30-station catchment
-(+0.009), and per-station |bias| falls at 27 of 36 stations.
+model6 has a **different** `build_estimator` from model4, because the two
+feature sets want opposite regularisation once tuned honestly (GroupKFold on
+station, never on the leave-site-out score):
+
+| | model4 | model6 |
+|---|---|---|
+| `max_leaf_nodes` | 3 (tiny trees) | **None** (unlimited) |
+| `max_features` | 0.5 | **0.15** (heavy per-split subsampling) |
+| `min_samples_leaf` | 150 | 20 |
+
+The `max_leaf_nodes=3` "extreme regularisation" that looked optimal in the earlier
+(leaky) analysis was an **artefact of the leak** — tiny trees couldn't overfit the
+look-ahead level signal. With leak-free features model6 instead wants large,
+expressive trees whose variance is controlled by feature subsampling; a
+single-parameter sweep put the optimum at `max_features=0.15` (skill flat 0.15–0.3,
+collapsing above 0.3).
 
 ## Status
 
-model6 is the **recommended** model — it supersedes [`model4`](model4.md) on the
-36-station set (higher NSE and r, lower bias) while keeping the same estimator.
-model4 remains the reference without the climate features. Inference needs the
-SILO antecedent rasters over the AOI in addition to model4's climatology and
-soil layers.
+model6 is the **recommended** model — it beats [`model4`](model4.md) on every
+leave-site-out metric on the 36-station set. It is not a finished product: the
+per-station level bias persists (see the README). Inference needs the SILO
+antecedent rasters over the AOI in addition to model4's SMIPS-lookback and soil
+layers (the inference path is being updated to the lookback features).
 
 ---
 <!-- NAV -->
