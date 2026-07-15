@@ -22,7 +22,7 @@ from pyproj import Transformer
 from emt.queries import query_for_focus_area
 from emt.downscale import downscale
 from emt.covariates import sample_points
-from emt.smips import smips_climatology
+from emt.smips import smips_lookback_day
 from emt.slga import soil_covariates, smooth_soil, SOIL_VARS
 from emt.model5.model import (build_estimator, ensure_features, fit, metrics,
                               FEATURES, TARGET, SOIL_SIGMA)
@@ -31,7 +31,6 @@ REPO = Path(__file__).resolve().parent.parent
 FIG = REPO / "handout" / "figures" / "downscale_yanco_model5.png"
 TABLE = REPO / "data" / "train_catchment_2006_2010.csv"
 DAY = date(2008, 7, 31)
-CLIM_PERIOD = (date(2006, 1, 1), date(2010, 12, 31))
 t0 = time.time()
 def stamp(m): print(f"[{time.time()-t0:6.0f}s] {m}", flush=True)
 
@@ -49,18 +48,17 @@ tr4 = m4_feat(train).dropna(subset=M4_FEATURES + [TARGET])
 m4 = m4_est(); m4.fit(tr4[M4_FEATURES], tr4[TARGET])
 stamp("trained model4 (raw soil) reference")
 
-# --- static AOI rasters ---
-q_clim = query_for_focus_area("yanco", *CLIM_PERIOD)
-clim = smips_climatology(q_clim, step_days=5)
-soil_raw = soil_covariates(q_clim)
+# --- extra AOI rasters (leak-free lookback + raw/smoothed soil) ---
+q = query_for_focus_area("yanco", DAY, DAY)
+smips_l = {k: v for k, v in smips_lookback_day(q, DAY).items()
+           if k != "smips_totalbucket"}
+soil_raw = soil_covariates(q)
 soil_sm = smooth_soil(soil_raw, SOIL_SIGMA)
-stamp(f"AOI climatology + soil (raw & smoothed, sigma={SOIL_SIGMA}px)")
-clim_layers = {"smips_mean_px": clim["smips_mean_px"], "smips_std_px": clim["smips_std_px"]}
-extra4 = {**clim_layers, **{v: soil_raw[v] for v in SOIL_VARS}}
-extra5 = {**clim_layers, **{v: soil_sm[v] for v in SOIL_VARS}}
+stamp(f"AOI SMIPS lookback + soil (raw & smoothed, sigma={SOIL_SIGMA}px)")
+extra4 = {**smips_l, **{v: soil_raw[v] for v in SOIL_VARS}}
+extra5 = {**smips_l, **{v: soil_sm[v] for v in SOIL_VARS}}
 
 # --- downscale both ---
-q = query_for_focus_area("yanco", DAY, DAY)
 ds4 = downscale(m4, q, DAY, M4_FEATURES, extra_layers=extra4)
 ds5 = downscale(m5, q, DAY, FEATURES, extra_layers=extra5)
 stamp(f"downscaled model4 & model5 ({ds5['sm_pred'].size/1e6:.1f}M px)")

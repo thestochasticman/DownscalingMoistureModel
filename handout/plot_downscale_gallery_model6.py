@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 from emt.queries import query_for_focus_area, query_for_station
 from emt.downscale import downscale
-from emt.smips import smips_climatology
+from emt.smips import smips_lookback_series
 from emt.slga import soil_covariates, SOIL_VARS
 from emt.antecedent import antecedent_grid, antecedent_day_layers
 from emt.model6.model import build_estimator, ensure_features, FEATURES, TARGET
@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parent.parent
 FIG = REPO / "handout" / "figures" / "downscale_gallery_model6.png"
 TABLE = REPO / "data" / "train_catchment_plus_m_2006_2010.csv"
 AOI = "kyeamba"
-CLIM_PERIOD = (date(2006, 1, 1), date(2010, 12, 31))
+CLIM_PERIOD = (date(2006, 1, 1), date(2010, 12, 31))   # antecedent seed window
 DATES = [date(2008, m, d) for m, d in
          [(1, 15), (2, 25), (4, 5), (5, 15), (6, 25), (8, 5), (9, 15), (10, 25), (12, 5)]]
 t0 = time.time()
@@ -40,16 +40,16 @@ tab = ensure_features(pd.read_csv(TABLE)).dropna(subset=FEATURES + [TARGET])
 model = build_estimator().fit(tab[FEATURES], tab[TARGET])
 stamp(f"trained model6 on {tab.station.nunique()} stations, {len(tab):,} rows")
 
-# --- static AOI rasters (climatology + soil) ---
-q_clim = query_for_focus_area(AOI, *CLIM_PERIOD)
-clim = smips_climatology(q_clim, step_days=5)
-soil = soil_covariates(q_clim)
-static = {"smips_mean_px": clim["smips_mean_px"], "smips_std_px": clim["smips_std_px"],
-          **{v: soil[v] for v in SOIL_VARS}}
-stamp("AOI climatology + soil")
+# --- AOI rasters: per-date SMIPS lookback (one cube) + static soil ---
+q_static = query_for_focus_area(AOI, DATES[0], DATES[-1])
+lb = smips_lookback_series(q_static, DATES)
+soil = soil_covariates(q_static)
+soil_layers = {v: soil[v] for v in SOIL_VARS}
+stamp(f"AOI SMIPS lookback series ({len(DATES)} dates) + soil")
 
-# --- gridded antecedent meteorology over the AOI (SILO S3, per pixel) ---
-ante_cube = antecedent_grid(q_clim, date(2006, 1, 1), date(2010, 12, 31))
+# --- gridded antecedent meteorology over the AOI (SILO, per pixel), one cube ---
+q_clim = query_for_focus_area(AOI, *CLIM_PERIOD)
+ante_cube = antecedent_grid(q_clim, *CLIM_PERIOD)
 stamp(f"gridded antecedent cube {dict(ante_cube.sizes)}")
 
 # --- downscale each date ---
@@ -57,7 +57,7 @@ fields = []
 for d in DATES:
     ante_layers = antecedent_day_layers(ante_cube, d)
     ds = downscale(model, query_for_focus_area(AOI, d, d), d, FEATURES,
-                   extra_layers={**static, **ante_layers})
+                   extra_layers={**lb[d], **soil_layers, **ante_layers})
     fields.append((d, ds["sm_pred"]))
     stamp(f"downscaled {d}  (mean {float(ds['sm_pred'].mean()):.1f}%)")
 

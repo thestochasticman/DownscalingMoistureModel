@@ -26,7 +26,7 @@ from pyproj import Transformer
 from emt.queries import query_for_focus_area
 from emt.downscale import downscale
 from emt.covariates import sample_points
-from emt.smips import smips_climatology
+from emt.smips import smips_lookback_day
 from emt.slga import soil_covariates, SOIL_VARS
 from emt.antecedent import antecedent_grid, antecedent_day_layers
 from emt.model6 import model as m6
@@ -36,7 +36,6 @@ REPO = Path(__file__).resolve().parent.parent
 FIG = REPO / "handout" / "figures" / "downscale_yanco_model6.png"
 TABLE = REPO / "data" / "train_catchment_plus_m_2006_2010.csv"
 DAY = date(2008, 7, 31)
-CLIM_PERIOD = (date(2006, 1, 1), date(2010, 12, 31))
 TARGET = m6.TARGET
 t0 = time.time()
 def stamp(m): print(f"[{time.time()-t0:6.0f}s] {m}", flush=True)
@@ -49,20 +48,18 @@ tr4 = m4.ensure_features(train).dropna(subset=m4.FEATURES + [TARGET])
 model4 = m4.build_estimator().fit(tr4[m4.FEATURES], tr4[TARGET])
 stamp(f"trained model6 & model4 on {train.station.nunique()} stns (Yanco held out)")
 
-# --- static AOI rasters + gridded antecedent ---
-q_clim = query_for_focus_area("yanco", *CLIM_PERIOD)
-clim = smips_climatology(q_clim, step_days=5)
-soil = soil_covariates(q_clim)
-static = {"smips_mean_px": clim["smips_mean_px"], "smips_std_px": clim["smips_std_px"],
-          **{v: soil[v] for v in SOIL_VARS}}
-ante_cube = antecedent_grid(q_clim, date(2006, 1, 1), date(2010, 12, 31))
-stamp(f"AOI climatology + soil + gridded antecedent {dict(ante_cube.sizes)}")
+# --- extra AOI rasters (leak-free lookback + soil) + gridded antecedent ---
+q = query_for_focus_area("yanco", DAY, DAY)
+smips_l = {k: v for k, v in smips_lookback_day(q, DAY).items()
+           if k != "smips_totalbucket"}
+soil = soil_covariates(q)
+static = {**smips_l, **{v: soil[v] for v in SOIL_VARS}}
+ante = antecedent_day_layers(antecedent_grid(q, DAY, DAY), DAY)
+stamp("AOI SMIPS lookback + soil + gridded antecedent")
 
 # --- downscale both for the day ---
-q = query_for_focus_area("yanco", DAY, DAY)
 ds4 = downscale(model4, q, DAY, m4.FEATURES, extra_layers=static)
-ds6 = downscale(model6, q, DAY, m6.FEATURES,
-                extra_layers={**static, **antecedent_day_layers(ante_cube, DAY)})
+ds6 = downscale(model6, q, DAY, m6.FEATURES, extra_layers={**static, **ante})
 stamp(f"downscaled model4 & model6 ({ds6['sm_pred'].size/1e6:.1f}M px)")
 
 # --- validate at the 12 held-out Yanco stations ---

@@ -32,6 +32,28 @@ The recommended model ([`model6`](model6.md)) adds antecedent-meteorology on top
 (pooled +0.40). The training table is built by
 [`emt/build_dataset.py`](../../emt/build_dataset.py).
 
+## Results (figures)
+
+Leave-site-out fit, model1 → model4 per-station NSE, feature importance and
+residual bias ([`plot_model4_results.py`](../plot_model4_results.py)):
+
+![model4 leave-site-out results, 30 stations](../figures/model4_results.png)
+
+Held-out predicted-vs-observed time series for every station:
+
+![model4 per-station held-out time series](../figures/model4_per_station.png)
+
+Extending the set with the six scattered regional
+[M-sites](../README.md#extending-coverage-regional-sites-30--36-stations) (30 → 36
+stations) is where the features pay off — model1 goes negative, model4 reaches
++0.31 ([`plot_msites.py`](../plot_msites.py)):
+
+![Extending coverage with regional M-sites: 36-station skill map and per-station comparison](../figures/msites_extension.png)
+
+The M-sites' own held-out time series:
+
+![Regional M-site held-out time series](../figures/msites_timeseries.png)
+
 | Function | Role |
 |---|---|
 | `build_estimator(**kw)` | Tuned `HistGradientBoostingRegressor` (small trees: `max_leaf_nodes=3, min_samples_leaf=150, max_features=0.5, max_iter=300`) |
@@ -97,10 +119,18 @@ generalise.
 
 Applying model4 per pixel ([`downscale.py`](downscale.py.md)) needs the SMIPS
 lookback rasters (the past 7/30/365-day SMIPS means over the AOI, ending at the
-prediction day) and the SLGA soil stack ([`slga.soil_covariates`](slga.py.md)),
-passed via `extra_layers`. **The inference path is being updated** from the old
-full-period climatology (`smips_mean_px`) to these trailing windows; the
-downscaling galleries pre-date the correction and are being regenerated.
+prediction day, from [`smips.smips_lookback_day`](../../emt/smips.py)) and the
+SLGA soil stack ([`slga.soil_covariates`](slga.py.md)), passed via `extra_layers`.
+The inference path and every downscaling figure now use these leak-free trailing
+windows (the old full-period `smips_mean_px` climatology is gone); the shipped
+one-call tool is [`emt/predict.py`](../../emt/predict.py).
+
+The leave-Yanco-out 30 m field ([`plot_downscale_model4.py`](../plot_downscale_model4.py),
+2008-07-31) — SMIPS resolved to 30 m from the leak-free lookback features, with
+the held-out Yanco stations overlaid (single-date validation; the reported skill
+is the leave-site-out table above):
+
+![model4 downscaled 30 m field over Yanco](../figures/downscale_yanco_model4.png)
 
 The per-station-skill vs spatial-texture tension the soil covariates introduce is
 explored in [`model5`](model5.md).

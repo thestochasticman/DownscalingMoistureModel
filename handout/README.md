@@ -53,6 +53,7 @@ then apply it. Each item links to a self-contained page.
 | # | Page | Output |
 |---|---|---|
 | 14 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
+| 15 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
 
 ## The model
 

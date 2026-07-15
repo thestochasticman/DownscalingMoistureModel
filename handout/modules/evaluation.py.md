@@ -76,6 +76,17 @@ The gap between the two is the central result of the project: the model reproduc
 **dynamics** but carries a per-station absolute-level **bias**. The per-station
 figure is the one to weight.
 
+What the harness produces — out-of-fold predicted-vs-observed by station,
+per-station correlation and bias, and feature importance (shown for
+[`model1`](model1.md), [`plot_results.py`](../plot_results.py)):
+
+![Leave-site-out predicted vs observed, per-station correlation/bias, importance](../figures/leave_site_out_cv.png)
+
+The same out-of-fold predictions as per-station time series — high within-site
+correlation, offset by the level bias:
+
+![Per-station out-of-fold time series](../figures/per_site_timeseries.png)
+
 ## Return value
 
 `leave_site_out_cv` returns a dict:

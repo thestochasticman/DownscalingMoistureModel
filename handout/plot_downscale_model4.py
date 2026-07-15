@@ -1,11 +1,12 @@
 """Stage 6 with model4: downscale SMIPS to 30 m over Yanco and validate.
 
 Same out-of-sample protocol as ``plot_downscale.py`` (train on Kyeamba +
-Adelong, Yanco withheld entirely), but with model4 -- which needs two static
-AOI rasters at inference, passed via ``extra_layers``:
+Adelong, Yanco withheld entirely), but with model4 -- which needs extra AOI
+rasters at inference, passed via ``extra_layers`` (the leak-free lookback
+features, matching training):
 
-* SMIPS pixel climatology over the AOI (``emt.smips.smips_climatology``,
-  thinned multi-year fetch, cached),
+* SMIPS trailing lookback over the AOI as of the day
+  (``emt.smips.smips_lookback_day`` -- past 7/30/365-day means + anomaly),
 * the SLGA soil stack (``emt.slga.soil_covariates``).
 
 Run from repo root::  PYTHONPATH=. python handout/plot_downscale_model4.py
@@ -25,7 +26,7 @@ from pyproj import Transformer
 from emt.queries import query_for_focus_area
 from emt.downscale import downscale
 from emt.covariates import sample_points
-from emt.smips import smips_climatology
+from emt.smips import smips_lookback_day
 from emt.slga import soil_covariates, SOIL_VARS
 from emt.model4.model import (build_estimator, ensure_features, metrics,
                               FEATURES, TARGET)
@@ -34,7 +35,6 @@ REPO = Path(__file__).resolve().parent.parent
 FIG = REPO / "handout" / "figures" / "downscale_yanco_model4.png"
 TABLE = REPO / "data" / "train_catchment_2006_2010.csv"
 DAY = date(2008, 7, 31)          # all 12 Yanco stations report this day
-CLIM_PERIOD = (date(2006, 1, 1), date(2010, 12, 31))   # matches training period
 # model1 reference values on this exact protocol (see plot_downscale.py run)
 M1_REF = dict(rmse=11.5, ubrmse=2.4, bias=11.3, r=0.41, nse=-20.0)
 t0 = time.time()
@@ -48,18 +48,16 @@ model.fit(train[FEATURES], train[TARGET])
 stamp(f"trained model4 on {train.site.unique().tolist()} "
       f"({train.station.nunique()} stns, {len(train):,} rows)")
 
-# --- static AOI rasters for inference ---
-q_clim = query_for_focus_area("yanco", *CLIM_PERIOD)
-clim = smips_climatology(q_clim, step_days=5)
-stamp(f"SMIPS climatology over Yanco AOI ({int(clim.attrs.get('n_samples', 0))} sample days)")
-soil = soil_covariates(q_clim)
+# --- extra AOI rasters for inference (leak-free lookback, matching training) ---
+q = query_for_focus_area("yanco", DAY, DAY)
+smips_l = smips_lookback_day(q, DAY)
+stamp("SMIPS lookback (past 7/30/365 d) over Yanco AOI")
+soil = soil_covariates(q)
 stamp("SLGA soil stack over Yanco AOI")
-extra = {"smips_mean_px": clim["smips_mean_px"],
-         "smips_std_px": clim["smips_std_px"],
-         **{v: soil[v] for v in SOIL_VARS}}
+extra = {k: v for k, v in smips_l.items() if k != "smips_totalbucket"}
+extra.update({v: soil[v] for v in SOIL_VARS})
 
 # --- downscale Yanco for the day ---
-q = query_for_focus_area("yanco", DAY, DAY)
 stamp(f"downscaling Yanco AOI {q.bbox} for {DAY} ...")
 ds = downscale(model, q, DAY, FEATURES, extra_layers=extra)
 ny, nx = ds["sm_pred"].shape

@@ -1,7 +1,7 @@
 # `downscale.py`: 30 m field generation (Stage 6)
 
 <!-- NAV -->
-[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md)
+[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md) · [Use the model →](predict.py.md)
 <!-- /NAV -->
 
 Source: [`../../emt/downscale.py`](../../emt/downscale.py)
@@ -20,20 +20,24 @@ field for one day over a focus area — the product the pipeline exists to gener
 2. Resample SMIPS to the 30 m grid by nearest neighbour, so each fine pixel
    inherits its overlying ≈1 km value.
 3. Supply the model's static/among-day covariates as `extra_layers` — the SMIPS
-   pixel climatology ([`smips.smips_climatology`](../../emt/smips.py)), SLGA soil
+   **lookback** rasters (past 7/30/365-day means + anomaly, as of the day, from
+   [`smips.smips_lookback_day`](../../emt/smips.py)), SLGA soil
    ([`slga.soil_covariates`](slga.py.md)) and, for [model6](model6.md), the
    gridded antecedent meteorology
    ([`antecedent.antecedent_grid`](../../emt/antecedent.py)); each raster is
-   reprojected onto the 30 m grid, and `smips_anom`/`smips_z` are derived per
-   pixel from the day's SMIPS and the climatology.
+   reprojected onto the 30 m grid. Every window is strictly backward-looking — the
+   old full-period `smips_mean_px` climatology (a look-ahead leak) has been
+   removed (see [Evaluation correction](../README.md#evaluation-correction)).
 4. Assemble the features per pixel (in `FEATURES` order), predict over pixels with
    complete covariates, and reshape to the grid; pixels outside the DEM footprint
    are NaN.
 
-The fine 30 m structure derives from the terrain, soil and SMIPS-climatology
+The fine 30 m structure derives from the terrain, soil and SMIPS-lookback
 covariates varying within each coarse SMIPS cell; the antecedent meteorology adds
 the ≈5 km recent-weather gradient. In-situ observations are never an input — they
-are only the training label and the validation reference.
+are only the training label and the validation reference. The shipped one-call
+inference tool is [`emt/predict.py`](../../emt/predict.py) (see
+[Use the model](../README.md#use-the-model)).
 
 ## The generated product
 
@@ -47,11 +51,14 @@ structure: drainage lines, wet valleys, dry ridges); reading down the rows is th
 seasonal cycle (wetter through the June–September austral winter, drier in
 summer). The same two galleries at full size, each on its own shared colour scale,
 are [`downscale_gallery_smips.png`](../figures/downscale_gallery_smips.png) and
-[`downscale_gallery.png`](../figures/downscale_gallery.png); the recommended
-model's version (model6, gridded antecedent) is
-[`downscale_gallery_model6.png`](../figures/downscale_gallery_model6.png). These
+[`downscale_gallery.png`](../figures/downscale_gallery.png). These
 are qualitative; the reported skill is the leave-site-out estimate on the
 [evaluation page](evaluation.py.md).
+
+The recommended model's version (model6, with the gridded antecedent
+meteorology):
+
+![model6 downscaled 30 m field, Kyeamba seasonal gallery](../figures/downscale_gallery_model6.png)
 
 Reproduced by [`plot_downscale_gallery.py`](../plot_downscale_gallery.py) and
 [`plot_downscale_gallery_model6.py`](../plot_downscale_gallery_model6.py). A
@@ -72,5 +79,5 @@ preserving the fine structure while removing the per-cell offset.
 
 ---
 <!-- NAV -->
-[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md)
+[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md) · [Use the model →](predict.py.md)
 <!-- /NAV -->

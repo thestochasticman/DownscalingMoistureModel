@@ -35,7 +35,9 @@ On the leave-Yanco-out demonstration
 | bias | +9.01 % | +10.37 % |
 
 The 30 m field is visibly less speckled and the spatial pattern correlates better
-with the stations.
+with the stations:
+
+![model4 vs model5 (smoothed soil) 30 m field over Yanco](../figures/downscale_yanco_model5.png)
 
 ## …but the cross-validated skill falls, with no sweet spot
 

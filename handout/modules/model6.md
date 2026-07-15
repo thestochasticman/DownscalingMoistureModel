@@ -40,6 +40,11 @@ comparison and the residual bias are in the four-panel
 
 ![model6 results](../figures/model6_results.png)
 
+Held-out predicted-vs-observed time series for every station
+([`plot_model6_results.py`](../plot_model6_results.py)):
+
+![model6 per-station held-out time series](../figures/model6_per_station.png)
+
 ## Feature importance
 
 ![model6 feature importance](../figures/model6_importance.png)
@@ -90,6 +95,17 @@ look-ahead level signal. With leak-free features model6 instead wants large,
 expressive trees whose variance is controlled by feature subsampling; a
 single-parameter sweep put the optimum at `max_features=0.15` (skill flat 0.15–0.3,
 collapsing above 0.3).
+
+## The 30 m field
+
+The leave-Yanco-out demonstration
+([`plot_downscale_model6.py`](../plot_downscale_model6.py), 2008-07-31) — SMIPS
+downscaled to 30 m with model6 from the leak-free lookback + antecedent features,
+held-out Yanco stations overlaid (single-date validation; the reported skill is
+the leave-site-out table above, and the shipped inference tool is
+[`emt/predict.py`](../../emt/predict.py)):
+
+![model6 downscaled 30 m field over Yanco](../figures/downscale_yanco_model6.png)
 
 ## Status
 

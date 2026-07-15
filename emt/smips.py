@@ -203,6 +203,33 @@ def smips_lookback_day(query: Query, day, var: str = "totalbucket",
     return {k: v.rio.write_crs(4326) for k, v in out.items()}
 
 
+def smips_lookback_series(query: Query, days, var: str = "totalbucket",
+                          windows=(7, 30, 365), workers: int = 8) -> dict:
+    """Per-day SMIPS lookback layers for several ``days``, fetching ONE cube.
+
+    Fetches the SMIPS cube once over ``[min(days) - max(windows), max(days)]`` and
+    slices each day's trailing means from it — the multi-date equivalent of
+    :func:`smips_lookback_day`, used by the seasonal downscale galleries so a
+    9-date gallery makes one ~2-year fetch instead of nine 1-year fetches.
+
+    Returns ``{date: {smips_7d, smips_30d, smips_365d, smips_anom}}`` (each a
+    DataArray on the SMIPS grid; ``smips_totalbucket`` is omitted — ``downscale``
+    sets it from the day's SMIPS). Every window looks strictly backward.
+    """
+    ds = sorted(pd.Timestamp(d) for d in days)
+    start = (ds[0] - pd.Timedelta(days=max(windows))).date()
+    cube = smips_cube(start, ds[-1].date(), tuple(query.bbox), var=var,
+                      workers=workers).sortby("time")
+    out: dict = {}
+    for d in ds:
+        upto = cube.sel(time=slice(None, d))
+        layers = {f"smips_{w}d": upto.isel(time=slice(-w, None)).mean("time")
+                  for w in windows}
+        layers["smips_anom"] = upto.isel(time=-1) - layers["smips_365d"]
+        out[d.date()] = {k: v.rio.write_crs(4326) for k, v in layers.items()}
+    return out
+
+
 def smips_climatology(query: Query, var: str = "totalbucket", step_days: int = 5,
                       workers: int = 8, reload: bool = False) -> xr.Dataset:
     """Per-pixel SMIPS mean/std over the query period (the model4 level features).

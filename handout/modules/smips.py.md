@@ -45,6 +45,17 @@ This alignment makes the cluster-fetch retrieval in
 used window-dependent values; downstream products were rebuilt after clearing the
 cache.
 
+How the native-grid snap removes the window dependence
+([`plot_grid_alignment.py`](../plot_grid_alignment.py)):
+
+![SMIPS native-grid alignment](../figures/grid_alignment.png)
+
+The effect on the sampled values and their relation to the target
+([`plot_results.py`](../plot_results.py)) — SMIPS before vs after alignment, the
+per-station shift, and target-vs-SMIPS:
+
+![SMIPS values before/after alignment and vs the target](../figures/smips_correction.png)
+
 ---
 <!-- NAV -->
 [← Study areas](queries.py.md) · [Index](../README.md) · [Terrain covariates →](covariates.py.md)
