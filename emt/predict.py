@@ -133,6 +133,27 @@ def predict(bbox, day, model=None, model_name: str = "model6",
     return xr.Dataset({"sm_pred": (grid.dims, pred)}, coords=grid.coords).rio.write_crs(grid.rio.crs)
 
 
+def plot_field(ds: xr.Dataset, out, title: str | None = None):
+    """Quick-look PNG of a predicted field (``sm_pred``) to ``out``."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    da = ds["sm_pred"]
+    v = da.values
+    vmin, vmax = np.nanpercentile(v, [2, 98])
+    ext = [float(ds.x.min()), float(ds.x.max()), float(ds.y.min()), float(ds.y.max())]
+    fig, ax = plt.subplots(figsize=(8, 7))
+    im = ax.imshow(v, extent=ext, origin="upper", cmap="YlGnBu", vmin=vmin, vmax=vmax)
+    ax.set(title=title or "Downscaled root-zone soil moisture (30 m)",
+           xlabel=f"easting ({ds.rio.crs})", ylabel="northing")
+    fig.colorbar(im, ax=ax, shrink=.85, label="root-zone soil moisture (%)")
+    fig.tight_layout()
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description="Downscale SMIPS to a 30 m soil-moisture map.")
     ap.add_argument("--bbox", type=float, nargs=4, required=True,
@@ -141,6 +162,8 @@ def main():
     ap.add_argument("--model", default="model6")
     ap.add_argument("-o", "--out", default=None,
                     help="output GeoTIFF (default: outputs/soil_moisture_<date>.tif)")
+    ap.add_argument("--no-plot", action="store_true",
+                    help="skip the companion quick-look PNG")
     a = ap.parse_args()
     from emt.config import OUTPUTS_DIR
     out = Path(a.out) if a.out else OUTPUTS_DIR / f"soil_moisture_{a.date}.tif"
@@ -148,6 +171,10 @@ def main():
     ds = predict(tuple(a.bbox), a.date, model_name=a.model)
     ds["sm_pred"].rio.to_raster(out)
     print(f"wrote {out}")
+    if not a.no_plot:
+        png = plot_field(ds, out.with_suffix(".png"),
+                         title=f"Root-zone soil moisture, {a.date} (30 m, model {a.model})")
+        print(f"wrote {png}")
 
 
 if __name__ == "__main__":

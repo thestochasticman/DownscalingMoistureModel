@@ -63,9 +63,15 @@ PYTHONPATH=. python -m emt.predict \
 
 `--bbox` is `W S E N` in EPSG:4326; `--model` defaults to `model6`. Output goes to
 `outputs/soil_moisture_<date>.tif` by default (repo-local `outputs/`, gitignored,
-`EMT_OUTPUTS_DIR`-overridable); pass `-o PATH` to choose your own. A first run over
-a new area fetches ~a year of SMIPS and SILO (a few minutes), cached under the AOI
-stub for later days.
+`EMT_OUTPUTS_DIR`-overridable); pass `-o PATH` to choose your own. A companion
+quick-look PNG (`plot_field`) is written next to the GeoTIFF — pass `--no-plot` to
+skip it. A first run over a new area fetches ~a year of SMIPS and SILO (a few
+minutes), cached under the AOI stub for later days.
+
+Example output (`python -m emt.predict --bbox 147.45 -35.45 147.52 -35.38 --date
+2008-07-31`) — the coarse ≈1 km SMIPS resolved to 30 m terrain structure:
+
+![example predict output — 30 m root-zone soil moisture](../figures/predict_example.png)
 
 ## Requirements
 

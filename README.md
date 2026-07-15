@@ -56,7 +56,7 @@ produce a map for any Australian area and day **without retraining**:
 PYTHONPATH=. python -m emt.predict \
     --bbox 147.30 -35.52 147.62 -35.10 \
     --date 2008-07-31
-# writes outputs/soil_moisture_2008-07-31.tif  (override with -o PATH)
+# writes outputs/soil_moisture_2008-07-31.tif + .png  (override with -o; --no-plot to skip)
 ```
 
 or from Python:
