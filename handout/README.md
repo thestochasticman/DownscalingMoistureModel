@@ -131,8 +131,8 @@ conda activate paddockts
 ```bash
 PYTHONPATH=. python -m emt.predict \
     --bbox 147.30 -35.52 147.62 -35.10 \
-    --date 2008-07-31 \
-    -o soil_moisture_30m.tif
+    --date 2008-07-31
+# writes outputs/soil_moisture_2008-07-31.tif  (override with -o PATH)
 ```
 
 — or the Python function:
@@ -141,12 +141,13 @@ PYTHONPATH=. python -m emt.predict \
 from emt.predict import predict
 ds = predict(bbox=(147.30, -35.52, 147.62, -35.10), day="2008-07-31")
 ds["sm_pred"]                      # xr.DataArray, 30 m root-zone soil moisture (%)
-ds["sm_pred"].rio.to_raster("soil_moisture_30m.tif")
+ds["sm_pred"].rio.to_raster("outputs/soil_moisture.tif")
 ```
 
 `--bbox` is `W S E N` in EPSG:4326; the output is a single-band GeoTIFF on the
-30 m Copernicus-DEM grid. A first run over a new area fetches ~a year of SMIPS and
-SILO (a few minutes); everything is cached under the AOI stub for subsequent days.
+30 m Copernicus-DEM grid, written to `outputs/` by default (override with `-o`). A
+first run over a new area fetches ~a year of SMIPS and SILO (a few minutes);
+everything is cached under the AOI stub for subsequent days.
 
 > **Caveat — Murrumbidgee-trained, unvalidated elsewhere.** The shipped model is
 > trained and validated only in the Murrumbidgee catchment. Run anywhere else and

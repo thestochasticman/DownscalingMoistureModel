@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import os
 from datetime import date as _date
+from pathlib import Path
 
 # The 30 m terrain COGs live on the PUBLIC Copernicus-DEM open-data bucket
 # (copernicus-dem-30m). Read it anonymously so the tool needs no AWS setup and
@@ -138,11 +139,15 @@ def main():
                     metavar=("W", "S", "E", "N"), help="lon/lat bounds (EPSG:4326)")
     ap.add_argument("--date", required=True, help="YYYY-MM-DD")
     ap.add_argument("--model", default="model6")
-    ap.add_argument("-o", "--out", default="soil_moisture_30m.tif", help="output GeoTIFF")
+    ap.add_argument("-o", "--out", default=None,
+                    help="output GeoTIFF (default: outputs/soil_moisture_<date>.tif)")
     a = ap.parse_args()
+    from emt.config import OUTPUTS_DIR
+    out = Path(a.out) if a.out else OUTPUTS_DIR / f"soil_moisture_{a.date}.tif"
+    out.parent.mkdir(parents=True, exist_ok=True)
     ds = predict(tuple(a.bbox), a.date, model_name=a.model)
-    ds["sm_pred"].rio.to_raster(a.out)
-    print(f"wrote {a.out}")
+    ds["sm_pred"].rio.to_raster(out)
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":

@@ -57,13 +57,15 @@ leave-region-out model); otherwise it loads `model_name` from `data/models/`.
 ```bash
 PYTHONPATH=. python -m emt.predict \
     --bbox 147.30 -35.52 147.62 -35.10 \
-    --date 2008-07-31 \
-    -o soil_moisture_30m.tif
+    --date 2008-07-31
+# writes outputs/soil_moisture_2008-07-31.tif
 ```
 
-`--bbox` is `W S E N` in EPSG:4326; `-o` defaults to `soil_moisture_30m.tif`;
-`--model` defaults to `model6`. A first run over a new area fetches ~a year of
-SMIPS and SILO (a few minutes), cached under the AOI stub for later days.
+`--bbox` is `W S E N` in EPSG:4326; `--model` defaults to `model6`. Output goes to
+`outputs/soil_moisture_<date>.tif` by default (repo-local `outputs/`, gitignored,
+`EMT_OUTPUTS_DIR`-overridable); pass `-o PATH` to choose your own. A first run over
+a new area fetches ~a year of SMIPS and SILO (a few minutes), cached under the AOI
+stub for later days.
 
 ## Requirements
 

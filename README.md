@@ -55,8 +55,8 @@ produce a map for any Australian area and day **without retraining**:
 ```bash
 PYTHONPATH=. python -m emt.predict \
     --bbox 147.30 -35.52 147.62 -35.10 \
-    --date 2008-07-31 \
-    -o soil_moisture_30m.tif
+    --date 2008-07-31
+# writes outputs/soil_moisture_2008-07-31.tif  (override with -o PATH)
 ```
 
 or from Python:
@@ -64,7 +64,7 @@ or from Python:
 ```python
 from emt.predict import predict
 ds = predict(bbox=(147.30, -35.52, 147.62, -35.10), day="2008-07-31")
-ds["sm_pred"].rio.to_raster("soil_moisture_30m.tif")   # 30 m soil moisture (%)
+ds["sm_pred"].rio.to_raster("outputs/soil_moisture.tif")   # 30 m soil moisture (%)
 ```
 
 `--bbox` is `W S E N` in EPSG:4326. A first run over a new area fetches ~a year of
