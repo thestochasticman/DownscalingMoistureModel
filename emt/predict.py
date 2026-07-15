@@ -60,7 +60,7 @@ def _doy(day) -> tuple[float, float]:
 
 
 def predict(bbox, day, model=None, model_name: str = "model6",
-            verbose: bool = True) -> xr.Dataset:
+            verbose: bool = True, save: bool = True, plot: bool = True) -> xr.Dataset:
     """Downscale to a 30 m root-zone soil-moisture field over ``bbox`` for ``day``.
 
     Args:
@@ -68,9 +68,13 @@ def predict(bbox, day, model=None, model_name: str = "model6",
         day: ``date`` or ISO string.
         model: a fitted estimator; if ``None``, loads ``model_name`` from
             ``data/models/`` (raises if not present — see README to obtain it).
+        save: write ``soil_moisture_<day>.tif`` into the PaddockTS Query output
+            dir for this AOI (``query.out_dir``, alongside its other products).
+        plot: also write a companion quick-look ``.png`` there.
 
-    Returns an ``xr.Dataset`` on the 30 m grid with ``sm_pred`` (%). Import the
-    model's feature list from its package if you need the exact order.
+    Returns an ``xr.Dataset`` on the 30 m grid with ``sm_pred`` (%); when saved,
+    the written paths are recorded in ``ds.attrs['output_tif' / 'output_png']``.
+    Import the model's feature list from its package if you need the exact order.
     """
     if isinstance(day, str):
         day = _date.fromisoformat(day)
@@ -130,7 +134,25 @@ def predict(bbox, day, model=None, model_name: str = "model6",
     if verbose:
         print(f"  predicted {int(valid.sum()):,} pixels, mean "
               f"{np.nanmean(pred):.1f}%", flush=True)
-    return xr.Dataset({"sm_pred": (grid.dims, pred)}, coords=grid.coords).rio.write_crs(grid.rio.crs)
+    ds = xr.Dataset({"sm_pred": (grid.dims, pred)},
+                    coords=grid.coords).rio.write_crs(grid.rio.crs)
+
+    if save:
+        outdir = Path(q.out_dir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        tif = outdir / f"soil_moisture_{day}.tif"
+        ds["sm_pred"].rio.to_raster(tif)
+        ds.attrs["output_tif"] = str(tif)
+        if verbose:
+            print(f"  saved {tif}", flush=True)
+        if plot:
+            png = outdir / f"soil_moisture_{day}.png"
+            plot_field(ds, png, title=f"Root-zone soil moisture, {day} "
+                                      f"(30 m, {model_name})")
+            ds.attrs["output_png"] = str(png)
+            if verbose:
+                print(f"  saved {png}", flush=True)
+    return ds
 
 
 def plot_field(ds: xr.Dataset, out, title: str | None = None):
@@ -161,20 +183,22 @@ def main():
     ap.add_argument("--date", required=True, help="YYYY-MM-DD")
     ap.add_argument("--model", default="model6")
     ap.add_argument("-o", "--out", default=None,
-                    help="output GeoTIFF (default: outputs/soil_moisture_<date>.tif)")
+                    help="also write the GeoTIFF to this path (default location is "
+                         "the AOI's PaddockTS query dir)")
     ap.add_argument("--no-plot", action="store_true",
                     help="skip the companion quick-look PNG")
     a = ap.parse_args()
-    from emt.config import OUTPUTS_DIR
-    out = Path(a.out) if a.out else OUTPUTS_DIR / f"soil_moisture_{a.date}.tif"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    ds = predict(tuple(a.bbox), a.date, model_name=a.model)
-    ds["sm_pred"].rio.to_raster(out)
-    print(f"wrote {out}")
-    if not a.no_plot:
-        png = plot_field(ds, out.with_suffix(".png"),
-                         title=f"Root-zone soil moisture, {a.date} (30 m, model {a.model})")
-        print(f"wrote {png}")
+    # By default the map is written into the AOI's PaddockTS query output dir
+    # (alongside its cached covariates); -o writes an extra copy where you want.
+    ds = predict(tuple(a.bbox), a.date, model_name=a.model, plot=not a.no_plot)
+    print(f"wrote {ds.attrs['output_tif']}")
+    if "output_png" in ds.attrs:
+        print(f"wrote {ds.attrs['output_png']}")
+    if a.out:
+        out = Path(a.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        ds["sm_pred"].rio.to_raster(out)
+        print(f"also wrote {out}")
 
 
 if __name__ == "__main__":

@@ -38,7 +38,10 @@ model was trained on — see
 observations are never an input.
 
 **Returns** an `xr.Dataset` on the 30 m grid with `sm_pred` (root-zone soil
-moisture, %); the CLI writes it as a single-band GeoTIFF.
+moisture, %). By default it also **saves** the GeoTIFF and a quick-look PNG into
+that AOI's PaddockTS query directory (`query.out_dir`, alongside its cached
+covariates), recording the paths in `ds.attrs['output_tif' / 'output_png']`
+(disable with `save=False` / `plot=False`).
 
 ## Python
 
@@ -58,15 +61,15 @@ leave-region-out model); otherwise it loads `model_name` from `data/models/`.
 PYTHONPATH=. python -m emt.predict \
     --bbox 147.30 -35.52 147.62 -35.10 \
     --date 2008-07-31
-# writes outputs/soil_moisture_2008-07-31.tif
+# writes soil_moisture_2008-07-31.tif + .png into the AOI's query dir
 ```
 
-`--bbox` is `W S E N` in EPSG:4326; `--model` defaults to `model6`. Output goes to
-`outputs/soil_moisture_<date>.tif` by default (repo-local `outputs/`, gitignored,
-`EMT_OUTPUTS_DIR`-overridable); pass `-o PATH` to choose your own. A companion
-quick-look PNG (`plot_field`) is written next to the GeoTIFF — pass `--no-plot` to
-skip it. A first run over a new area fetches ~a year of SMIPS and SILO (a few
-minutes), cached under the AOI stub for later days.
+`--bbox` is `W S E N` in EPSG:4326; `--model` defaults to `model6`. The map is
+saved as `soil_moisture_<date>.tif` in the AOI's PaddockTS query directory, with a
+companion quick-look PNG (`plot_field`) beside it — pass `--no-plot` to skip the
+PNG, or `-o PATH` to write an extra copy of the GeoTIFF wherever you like. A first
+run over a new area fetches ~a year of SMIPS and SILO (a few minutes), cached under
+the AOI stub for later days.
 
 Example output (`python -m emt.predict --bbox 147.45 -35.45 147.52 -35.38 --date
 2008-07-31`) — the coarse ≈1 km SMIPS resolved to 30 m terrain structure:
