@@ -29,13 +29,18 @@ the five SLGA slices spanning 0–100 cm (weights = slice thickness), matching t
 
 ## Why a project-local loader
 
-PaddockTS provides `download_slga_soils`, but it hardcodes a single SLGA release
-date in the COG URL (`..._20210902.tif`). That date is correct for clay and sand
-but returns 404 for AWC (released `20210614`) and bulk density (`20230607`): each
-SLGA attribute is published on its own date. This module resolves the actual
-filename per attribute from the TERN datastore directory listing (robust to date
-changes), while reusing PaddockTS's TERN API-key authentication and attribute
-codes.
+The COG URL resolution and TERN authentication are **delegated to PaddockTS**
+(`SLGASoils.utils.get_cog_url` / `_setup_tern_auth`). Historically PaddockTS
+hardcoded a single SLGA release date in the COG URL (`..._20210902.tif`), correct
+for clay/sand but 404 for AWC (released `20210614`) and bulk density (`20230607`)
+— each attribute is published on its own date. That was **fixed upstream**:
+`get_cog_url` now resolves each attribute's actual filename from the TERN
+datastore directory listing, so it works for every attribute.
+
+This project-local module therefore exists only for what PaddockTS's
+`download_slga_soils` does not: **depth-averaging** the standard SLGA slices into a
+single root-zone (0–100 cm) value per attribute — the model's feature — cached as
+one NetCDF per AOI.
 
 Requires a TERN API key (`tern_api_key` in `~/.config/PaddockTS.json`).
 

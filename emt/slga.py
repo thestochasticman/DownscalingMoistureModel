@@ -5,66 +5,39 @@ per-pixel absolute-moisture *baseline* that SMIPS + terrain cannot resolve is se
 largely by soil texture and water-holding capacity; these come from the Soil and
 Landscape Grid of Australia (SLGA v2, TERN).
 
-Why this exists instead of ``PaddockTS.Environmental.SLGASoils.download_slga_soils``:
-that loader hardcodes a single release date in its COG URL
-(``..._20210902.tif``), which is correct for clay/sand/silt but 404s for AWC
-(``20210614``) and bulk density (``20230607``) — each SLGA attribute is released
-on its own date. This module resolves the actual filename per attribute from the
-TERN datastore directory listing (robust to date changes), reuses PaddockTS's
-TERN API-key auth, and aggregates the standard depth slices into a single
-root-zone (0-100 cm) value per attribute.
+The COG URL resolution and TERN auth are delegated to PaddockTS
+(``SLGASoils.utils.get_cog_url`` / ``_setup_tern_auth`` — ``get_cog_url`` resolves
+each attribute's release date from the datastore listing, so AWC/BDW work as well
+as clay/sand). This module exists on top of ``download_slga_soils`` only to
+depth-average the standard SLGA slices into a single root-zone (0-100 cm) value
+per attribute (the model's feature), cached as one NetCDF per AOI.
 
 Requires a TERN API key (``tern_api_key`` in ``~/.config/PaddockTS.json``).
 """
 from __future__ import annotations
 
-import re
 from os import makedirs
 from os.path import exists
 
 import numpy as np
-import requests
 import rioxarray  # noqa: F401  (registers the .rio accessor)
 import xarray as xr
 
 from PaddockTS.query import Query
-from PaddockTS.Environmental.SLGASoils.utils import load_tern_api_key, _setup_tern_auth
+from PaddockTS.Environmental.SLGASoils.utils import (
+    load_tern_api_key, _setup_tern_auth, get_cog_url)
 
-DATASTORE = ("https://data.tern.org.au/model-derived/slga/NationalMaps/"
-             "SoilAndLandscapeGrid")
-
-# Model feature name -> SLGA attribute code.
+# Model feature name -> PaddockTS SLGA attribute name (see SLGASoils.attribute_codes).
 SOIL_VARS = ("soil_clay", "soil_sand", "soil_awc", "soil_bdw")
-ATTR_CODE = {"soil_clay": "CLY", "soil_sand": "SND",
-             "soil_awc": "AWC", "soil_bdw": "BDW"}
+SLGA_ATTR = {"soil_clay": "Clay", "soil_sand": "Sand",
+             "soil_awc": "Available_Water_Capacity", "soil_bdw": "Bulk_Density"}
 
 # Standard SLGA depth slices spanning the 0-100 cm root zone, with thickness (cm)
 # used as the depth-averaging weight. (100-200 cm is below the root zone.)
-DEPTHS = [("000", "005", 5), ("005", "015", 10), ("015", "030", 15),
-          ("030", "060", 30), ("060", "100", 40)]
+DEPTHS = [("0-5cm", 5), ("5-15cm", 10), ("15-30cm", 15),
+          ("30-60cm", 30), ("60-100cm", 40)]
 
 get_filename = lambda q: f"{q.tmp_dir}/Environmental/{q.stub}_slga.nc"
-
-_DIR_CACHE: dict[str, list[str]] = {}
-
-
-def _list_dir(code: str, api_key: str) -> list[str]:
-    """Filenames in the SLGA v2 directory for ``code`` (cached per process)."""
-    if code not in _DIR_CACHE:
-        r = requests.get(f"{DATASTORE}/{code}/v2/",
-                         headers={"x-api-key": api_key}, timeout=60)
-        r.raise_for_status()
-        _DIR_CACHE[code] = re.findall(
-            rf"{code}_\d{{3}}_\d{{3}}_EV_[A-Za-z_]+_\d{{8}}\.tif", r.text)
-    return _DIR_CACHE[code]
-
-
-def _cog_url(code: str, ds: str, de: str, api_key: str) -> str:
-    """Resolve the expected-value COG URL for one attribute/depth (date varies)."""
-    matches = [f for f in _list_dir(code, api_key) if f.startswith(f"{code}_{ds}_{de}_EV_")]
-    if not matches:
-        raise RuntimeError(f"No SLGA EV COG for {code} {ds}-{de} cm in datastore listing")
-    return f"{DATASTORE}/{code}/v2/{sorted(matches)[-1]}"
 
 
 def _read_window(url: str, bbox) -> xr.DataArray:
@@ -95,10 +68,10 @@ def soil_covariates(query: Query, reload: bool = False) -> xr.Dataset:
     layers = {}
     ref = None
     for var in SOIL_VARS:
-        code = ATTR_CODE[var]
+        attr = SLGA_ATTR[var]
         stack, weights = [], []
-        for ds_, de_, thick in DEPTHS:
-            da = _read_window(_cog_url(code, ds_, de_, api_key), query.bbox)
+        for depth, thick in DEPTHS:
+            da = _read_window(get_cog_url(attr, depth, api_key), query.bbox)
             if ref is None:
                 ref = da
             else:
