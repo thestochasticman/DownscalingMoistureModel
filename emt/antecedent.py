@@ -105,8 +105,14 @@ def antecedent_grid(query, start: date, end: date, step_deg: float = 0.05,
             return ds.load()
 
     minx, miny, maxx, maxy = query.bbox
-    lons = np.round(np.arange(minx, maxx + step_deg / 2, step_deg), 4)
-    lats = np.round(np.arange(miny, maxy + step_deg / 2, step_deg), 4)
+    # Inclusive endpoints with >=2 samples per axis, so an AOI smaller than
+    # step_deg still yields a >=2x2 grid that spans it (a 1xN grid reprojects to
+    # all-NaN because a single row has no extent to resample from).
+    def _axis(lo, hi, step):
+        n = max(2, int(np.ceil((hi - lo) / step)) + 1)
+        return np.round(np.linspace(lo, hi, n), 4)
+    lons = _axis(minx, maxx, step_deg)
+    lats = _axis(miny, maxy, step_deg)
     if verbose:
         print(f"  SILO point-grid {len(lats)}x{len(lons)} "
               f"({len(lats)*len(lons)} cells) @ {step_deg}deg", flush=True)
