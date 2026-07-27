@@ -15,3 +15,7 @@ __pycache__/
 
 # os
 .DS_Store
+
+# local secrets and generated WeatherLink validation products
+.secrets/
+weatherlink_validation/outputs/
