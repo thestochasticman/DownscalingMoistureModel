@@ -96,10 +96,10 @@ To detect whether the dense training dataset local tuning performs well in other
 
 ## Figures:
 
-- `figures/timeseries_obs_vs_model6.png`
-- `figures/scatter_obs_vs_model6.png`
-- `figures/nse_by_trailing_window.png`
-- `figures/cumulative_nse.png`
+- ![timeseries_obs_vs_model6.png](../weatherlink_validation/outputs/profile_mean_591644_2025-07-21_2026-07-20/figures/timeseries_obs_vs_model6.png)
+- ![scatter_obs_vs_model6.png](../weatherlink_validation/outputs/profile_mean_591644_2025-07-21_2026-07-20/figures/scatter_obs_vs_model6.png)
+- ![nse_by_trailing_window.png](../weatherlink_validation/outputs/profile_mean_591644_2025-07-21_2026-07-20/figures/nse_by_trailing_window.png)
+- ![cumulative_nse.png](../weatherlink_validation/outputs/profile_mean_591644_2025-07-21_2026-07-20/figures/cumulative_nse.png)
 
 ## Profile metadata
 
