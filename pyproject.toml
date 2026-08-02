@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "scikit-learn",  # the downscaling regression model
     "xlrd",          # legacy .xls reader for OzNet in-situ files
+    "scipy",         # model7 bucket-parameter calibration (Nelder-Mead)
 ]
 
 [build-system]

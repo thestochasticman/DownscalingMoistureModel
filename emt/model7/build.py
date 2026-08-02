@@ -1,0 +1,129 @@
+"""Build model7's inputs: OzNet target, SILO daily forcing, terrain statics.
+
+model7 does not use the ML training table (no SMIPS, no soil): it needs the
+target series, a *continuous* daily forcing record per station (from one year
+before the study start, so calibration follows a full spin-up year), and the
+per-station terrain statics for the offset variant. All three are national,
+public inputs — SILO needs only a registered email, the Copernicus DEM none.
+
+Outputs (``data/``, gitignored like every other table)::
+
+    process_target_2006_2010.csv     station-day root-zone VWC (the target)
+    process_forcing_2005_2010.csv    per-station daily rain / PET / VPD
+    process_terrain_statics.csv      per-station TERRAIN_VARS at the point
+
+Run::  PYTHONPATH=. python -m emt.model7.build
+"""
+from __future__ import annotations
+
+from datetime import date
+
+import pandas as pd
+
+from emt.build_dataset import DEFAULT_START, DEFAULT_END, site_of
+from emt.covariates import TERRAIN_VARS, sample_points, terrain_covariates
+from emt.insitu.coordinates import fetch_station_coords
+from emt.insitu.oznet import fetch_manifest, load_daily_rootzone
+from emt.queries import _period, query_for_station
+from PaddockTS.Environmental.SILO.download_silo import download_silo
+from PaddockTS.query import Query
+
+TARGET_CSV = "data/process_target_2006_2010.csv"
+FORCING_CSV = "data/process_forcing_2005_2010.csv"
+STATICS_CSV = "data/process_terrain_statics.csv"
+
+
+def build_target(start: date = DEFAULT_START, end: date = DEFAULT_END,
+                 out: str | None = TARGET_CSV) -> pd.DataFrame:
+    """OzNet daily root-zone target for every core station with coordinates."""
+    man = fetch_manifest()
+    coords = fetch_station_coords(sorted(man["station"].unique()))
+    coords = coords.dropna(subset=["lat", "lon"]).copy()
+    coords["site"] = coords["station"].map(site_of)
+    coords = coords.dropna(subset=["site"])
+    man = man[man["station"].isin(coords["station"])
+              & man["year"].between(start.year, end.year)]
+    daily = load_daily_rootzone(manifest=man)
+    daily["site"] = daily["station"].map(site_of)
+    daily["time"] = pd.to_datetime(daily["time"])
+    daily = daily[(daily["time"] >= pd.Timestamp(start))
+                  & (daily["time"] <= pd.Timestamp(end))]
+    if out:
+        daily.to_csv(out, index=False)
+    return daily
+
+
+def build_forcing(stations: list[str], start: date = DEFAULT_START,
+                  end: date = DEFAULT_END,
+                  out: str | None = FORCING_CSV) -> pd.DataFrame:
+    """Continuous daily SILO rain/PET/VPD per station over [start-1yr, end]."""
+    coords = fetch_station_coords(stations).set_index("station")
+    frames = []
+    for stn in stations:
+        q = query_for_station(stn, float(coords.loc[stn, "lat"]),
+                              float(coords.loc[stn, "lon"]),
+                              date(start.year - 1, 1, 1), end)
+        try:
+            silo = download_silo(q)
+        except Exception as e:                              # noqa: BLE001
+            print(f"  SILO {stn}: FAIL {type(e).__name__}: {e}", flush=True)
+            continue
+        silo = silo.rename(columns={silo.columns[0]: "time"})
+        keep = silo[["time", "daily_rain", "et_morton_potential", "vp_deficit"]].copy()
+        keep["station"] = stn
+        frames.append(keep)
+    forcing = pd.concat(frames, ignore_index=True)
+    if out:
+        forcing.to_csv(out, index=False)
+    return forcing
+
+
+def build_terrain_statics(stations: list[str], start: date = DEFAULT_START,
+                          end: date = DEFAULT_END,
+                          out: str | None = STATICS_CSV) -> pd.DataFrame:
+    """Sample TERRAIN_VARS at each station point (30 m Copernicus DEM).
+
+    A station whose 1.5 km window degenerates at a DEM tile boundary (Y9 does)
+    is retried with a larger buffer under a distinct stub — PaddockTS's registry
+    pins each stub to one bbox, so the retry must not reuse the original stub.
+    """
+    coords = fetch_station_coords(stations).set_index("station")
+    rows = []
+    for stn in stations:
+        lat, lon = float(coords.loc[stn, "lat"]), float(coords.loc[stn, "lon"])
+        for buf in (1.5, 2.0, 3.0):
+            try:
+                stub = (f"oznet_{stn}_{_period(start, end)}" if buf == 1.5 else
+                        f"oznet_{stn}_b{buf:g}_{_period(start, end)}")
+                q = Query.from_lat_lon(lat=lat, lon=lon, buffer_km=buf,
+                                       start=start, end=end, stub=stub)
+                terr = terrain_covariates(q)
+                row = {"station": stn}
+                for v in TERRAIN_VARS:
+                    row[v] = float(sample_points(terr[v], lon, lat).values)
+                rows.append(row)
+                break
+            except Exception as e:                          # noqa: BLE001
+                print(f"  terrain {stn} (buffer {buf}): "
+                      f"{type(e).__name__}: {e}", flush=True)
+    statics = pd.DataFrame(rows)
+    if out:
+        statics.to_csv(out, index=False)
+    return statics
+
+
+def build(start: date = DEFAULT_START, end: date = DEFAULT_END) -> None:
+    print("=== target (OzNet) ===", flush=True)
+    daily = build_target(start, end)
+    stations = sorted(daily["station"].unique())
+    print(f"  {len(daily)} rows, {len(stations)} stations", flush=True)
+    print("=== forcing (SILO) ===", flush=True)
+    forcing = build_forcing(stations, start, end)
+    print(f"  {len(forcing)} rows, {forcing['station'].nunique()} stations", flush=True)
+    print("=== terrain statics (Copernicus DEM) ===", flush=True)
+    statics = build_terrain_statics(stations, start, end)
+    print(f"  {len(statics)} stations", flush=True)
+
+
+if __name__ == "__main__":
+    build()

@@ -1,7 +1,7 @@
 # `model6`: model4 + antecedent meteorology (recommended)
 
 <!-- NAV -->
-[← model5 · Soil smoothing](model5.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model5 · Soil smoothing](model5.md) · [Index](../README.md) · [model7 · Process model →](model7.md)
 <!-- /NAV -->
 
 Source: [`../../emt/model6/model.py`](../../emt/model6/model.py)
@@ -120,5 +120,5 @@ rasters over the AOI and predicts per 30 m pixel (see
 
 ---
 <!-- NAV -->
-[← model5 · Soil smoothing](model5.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model5 · Soil smoothing](model5.md) · [Index](../README.md) · [model7 · Process model →](model7.md)
 <!-- /NAV -->
