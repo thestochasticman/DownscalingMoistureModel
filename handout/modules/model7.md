@@ -58,6 +58,19 @@ same shrinkage-of-levels failure mode diagnosed for
 flip side: the median-r station tracks every wetting and dry-down through five
 years, held out.
 
+Held-out predicted-vs-observed time series for every station
+([`plot_model7_per_station.py`](../plot_model7_per_station.py), from the cached
+LOSO predictions):
+
+![model7 per-station held-out time series](../figures/model7_per_station.png)
+
+The failure mode is uniform and readable station by station: where model7 is
+wrong it is wrong by a **constant** — A1 (r 0.93, bias −12.5 %), K12 (r 0.67,
+bias −15.5 %) and K1 (r 0.83, bias +10.5 %) ride the observed series at a fixed
+offset — while stations whose level the offsets catch sit directly on the
+observations (K7 NSE 0.79, K10 0.69, A5 0.60, M1 0.55). Dynamics are never the
+problem: 30 of 37 stations have held-out r ≥ 0.7.
+
 ## Per-station terrain offsets (two-stage ridge)
 
 The one seat the process model offers for between-site structure is a static
