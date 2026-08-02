@@ -1,7 +1,7 @@
 # `model7`: a process model — calibrated bucket water balance
 
 <!-- NAV -->
-[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md) · [model8 · + SLGA soil →](model8.md)
 <!-- /NAV -->
 
 Source: [`../../emt/model7/model.py`](../../emt/model7/model.py) ·
@@ -106,10 +106,9 @@ sd), drier on steeper slopes (−0.81), slightly drier with elevation (−0.23).
 2. **The level problem is information-limited, not model-limited.** Neither a
    histogram-gradient-boosting model with 25 covariates nor a process model
    with terrain offsets ranks unseen sites well; model6's advantage rides on
-   SLGA soil. A process route to the same information exists — set `smax` from
-   SLGA available water capacity instead of calibrating it globally — and is
-   the obvious next experiment (SLGA needs a TERN key, which this environment
-   did not have).
+   SLGA soil. A process route to the same information exists, and
+   [**model8**](model8.md) takes it: the same bucket with SLGA soil in the
+   offset stage reaches pooled parity with model6.
 3. **A hybrid is the natural continuation**: bucket storage (or its anomaly) as
    a *feature* for the ML models, or SMIPS assimilated into the bucket — the
    two models fail differently, and the progress report's §5.5 hybrid
@@ -146,5 +145,5 @@ gridded SILO forcing (both national), but a map is not its point.
 
 ---
 <!-- NAV -->
-[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model6 · Antecedent meteorology](model6.md) · [Index](../README.md) · [model8 · + SLGA soil →](model8.md)
 <!-- /NAV -->

@@ -36,7 +36,7 @@ then apply it. Each item links to a self-contained page.
 | 5 | [Soil covariates (SLGA)](modules/slga.py.md) | Root-zone clay/sand/AWC/bulk-density |
 | 6 | [Training table](modules/features.py.md) | One row per station-day: target + all predictors |
 
-**2 · Evaluating and modelling** — how skill is measured, and seven models.
+**2 · Evaluating and modelling** — how skill is measured, and eight models.
 
 | # | Page | Role |
 |---|---|---|
@@ -48,13 +48,14 @@ then apply it. Each item links to a self-contained page.
 | 12 | [model5 · Soil smoothing](modules/model5.md) | A documented tradeoff, not recommended |
 | 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + weather (pooled NSE +0.38) |
 | 14 | [model7 · Process model](modules/model7.md) | No-ML bucket water balance — matches model6's per-station dynamics (r 0.83), pooled NSE +0.18 |
+| 15 | [model8 · Process model + SLGA soil](modules/model8.md) | model7's bucket + soil offsets — **ML parity** (pooled NSE +0.40, median station NSE +0.22) |
 
 **3 · Applying the model**
 
 | # | Page | Output |
 |---|---|---|
-| 15 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
-| 16 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
+| 16 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
+| 17 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
 
 ## The model
 
