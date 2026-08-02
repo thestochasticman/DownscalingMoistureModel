@@ -256,6 +256,29 @@ class BucketEstimator:
         self.params_ = pd.Series(values, index=names)
         return self
 
+    @property
+    def bucket_params(self) -> tuple[float, float, float]:
+        """``(smax, alpha, k)`` -- the state-equation parameters."""
+        x = self.params_.to_numpy()
+        return float(x[0]), float(x[1]), float(x[2])
+
+    def readout(self, storage: np.ndarray, statics: np.ndarray | None = None) -> np.ndarray:
+        """Map bucket storage (mm) to volumetric %, with the fitted offsets.
+
+        The inference counterpart of :meth:`predict`: it takes *storage the
+        caller simulated* (at a new location, over any period, on any grid)
+        instead of indexing the training forcing store. ``statics`` is an
+        ``(n, n_statics)`` array in the fitted ``_static_vars`` order,
+        standardised here by the training mean/std.
+        """
+        x = self.params_.to_numpy()
+        smax, theta_r, dtheta = x[0], x[3], x[4]
+        vwc = theta_r + dtheta * np.asarray(storage, dtype=float) / smax
+        if statics is not None:
+            z = (np.asarray(statics, dtype=float) - self._static_mean) / self._static_std
+            vwc = vwc + z @ x[5:-1] + x[-1]
+        return vwc
+
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         if self.params_ is None:
             raise RuntimeError("fit before predict")

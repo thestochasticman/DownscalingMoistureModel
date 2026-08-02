@@ -1,0 +1,301 @@
+"""Run model8 anywhere in Australia, for **any date** -- point series or 30 m map.
+
+    from emt.model8.predict import predict_point, predict_map
+    s  = predict_point(lat=-35.05, lon=147.5, start="2024-01-01", end="2024-12-31")
+    ds = predict_map(bbox=(147.30, -35.52, 147.62, -35.10), day="2024-09-15")
+
+or from the command line::
+
+    python -m emt.model8.predict --lat -35.05 --lon 147.5 --start 2024-01-01 --end 2024-12-31
+    python -m emt.model8.predict --bbox 147.30 -35.52 147.62 -35.10 --date 2024-09-15
+
+**Why a process model can answer for any date.** model8 carries no lookback
+*features*; it carries a *state*. To predict day D the bucket is simply run
+forward from a spin-up start to D on SILO rain/PET -- so the same fitted model
+serves 2006 or last week, with no retraining and no SMIPS. Spin-up defaults to
+two years before the requested period, comfortably longer than the fitted
+store's memory (recession k gives an e-folding time of ~5 months).
+
+The 30 m map is a genuine downscaling: the water balance runs on the SILO
+forcing grid (~5 km, the scale at which weather actually varies), and the
+fine structure comes from the per-pixel SLGA soil + terrain offsets on the
+30 m Copernicus-DEM grid.
+
+REQUIRES network access, a SILO email and a TERN API key in
+``~/.config/PaddockTS.json``. Like every model here, model8 is calibrated on
+the Murrumbidgee: elsewhere it produces a plausible but **unvalidated** field.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+from datetime import date as _date
+from pathlib import Path
+
+# 30 m terrain COGs live on the public Copernicus-DEM bucket -- read anonymously
+# so no AWS setup is needed (see emt/predict.py for the same rationale).
+os.environ.setdefault("AWS_NO_SIGN_REQUEST", "YES")
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+from rasterio.enums import Resampling
+
+from PaddockTS.query import Query
+from PaddockTS.Environmental.SILO.download_silo import download_silo
+
+from emt.covariates import terrain_covariates, sample_points
+from emt.model7.model import _step_loop
+from emt.model8.model import STATIC_VARS, TERRAIN_STATIC_VARS
+from emt.persist import load_model
+from emt.slga import soil_covariates, SOIL_VARS
+
+WARNING = ("NOTE: model8 is calibrated on the Murrumbidgee catchment; predictions "
+           "elsewhere are plausible but UNVALIDATED. Treat as indicative.")
+
+SPINUP_YEARS = 2          # >> the bucket's ~5-month memory, so day 1 is unbiased
+GRID_STEP_DEG = 0.1       # forcing-grid spacing for maps (SILO's native is 0.05)
+
+_RAIN, _PET = "daily_rain", "et_morton_potential"
+
+
+def _as_date(d) -> _date:
+    return _date.fromisoformat(d) if isinstance(d, str) else d
+
+
+def _spinup_start(start: _date) -> _date:
+    return _date(start.year - SPINUP_YEARS, 1, 1)
+
+
+def _tag(*parts) -> str:
+    return "_".join(str(p) for p in parts).replace(".", "p").replace("-", "m")
+
+
+def _load(model, model_name: str):
+    if model is not None:
+        return model
+    est = load_model(model_name)
+    if est is None:
+        raise FileNotFoundError(
+            f"no trained model at data/models/{model_name}.joblib — fit one with "
+            f"`python -m emt.model7.build` then `emt.model8.model.fit`.")
+    return est
+
+
+def _silo_series(q: Query) -> pd.DataFrame:
+    """Daily rain/PET for a Query's centre, indexed by date."""
+    s = download_silo(q).rename(columns=lambda c: "time" if c.startswith("YYYY") else c)
+    s["time"] = pd.to_datetime(s["time"])
+    return s.set_index("time")[[_RAIN, _PET]].sort_index()
+
+
+def _simulate(rain: np.ndarray, pet: np.ndarray, model) -> np.ndarray:
+    """Bucket storage (days, n) from forcing (days, n) using the fitted params."""
+    smax, alpha, k = model.bucket_params
+    rain = np.ascontiguousarray(rain, dtype=float)
+    pet = np.ascontiguousarray(pet, dtype=float)
+    return _step_loop(rain, pet, np.full(rain.shape[1], smax), alpha, k)
+
+
+def _statics_at_point(q: Query, lon: float, lat: float) -> np.ndarray:
+    """SLGA soil + terrain at one point, in ``STATIC_VARS`` order."""
+    soil, terr = soil_covariates(q), terrain_covariates(q)
+    src = {**{v: soil[v] for v in SOIL_VARS},
+           **{v: terr[v] for v in TERRAIN_STATIC_VARS}}
+    return np.array([[float(sample_points(src[v], lon, lat).values) for v in STATIC_VARS]])
+
+
+# --------------------------------------------------------------------------- #
+# Point time series -- any date range
+# --------------------------------------------------------------------------- #
+def predict_point(lat: float, lon: float, start, end=None, model=None,
+                  model_name: str = "model8", buffer_km: float = 1.5,
+                  verbose: bool = True) -> pd.DataFrame:
+    """Daily root-zone soil moisture (%) at one location over any date range.
+
+    Returns a DataFrame ``[time, sm_pred, storage_mm]`` covering
+    ``[start, end]`` (``end`` defaults to ``start``, i.e. a single day).
+    """
+    start = _as_date(start)
+    end = _as_date(end) if end is not None else start
+    model = _load(model, model_name)
+    if verbose:
+        print(WARNING, flush=True)
+
+    sim_start = _spinup_start(start)
+    q = Query.from_lat_lon(lat=lat, lon=lon, buffer_km=buffer_km,
+                           start=sim_start, end=end,
+                           stub=_tag("m8pt", f"{lat:.4f}", f"{lon:.4f}",
+                                     sim_start, end))
+    if verbose:
+        print(f"  SILO forcing {sim_start} → {end} "
+              f"({SPINUP_YEARS}-year spin-up) ...", flush=True)
+    silo = _silo_series(q)
+    if verbose:
+        print("  SLGA soil + terrain ...", flush=True)
+    statics = _statics_at_point(q, lon, lat)
+
+    storage = _simulate(silo[[_RAIN]].to_numpy(), silo[[_PET]].to_numpy(), model)
+    vwc = model.readout(storage[:, 0], np.repeat(statics, len(silo), axis=0))
+
+    out = pd.DataFrame({"time": silo.index, "sm_pred": vwc,
+                        "storage_mm": storage[:, 0]})
+    out = out[(out["time"] >= pd.Timestamp(start)) & (out["time"] <= pd.Timestamp(end))]
+    if verbose:
+        print(f"  {len(out)} days, mean {out['sm_pred'].mean():.1f}%", flush=True)
+    return out.reset_index(drop=True)
+
+
+# --------------------------------------------------------------------------- #
+# 30 m map -- any day
+# --------------------------------------------------------------------------- #
+def _forcing_grid(bbox, sim_start: _date, day: _date, step_deg: float,
+                  verbose: bool) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Daily rain/PET on a lon/lat grid over ``bbox`` -> (rain, pet, lons, lats).
+
+    One cached SILO point download per cell (the open gridded NetCDFs are
+    chunked by time, so a small-bbox subset would pull continental grids --
+    the same reasoning as :func:`emt.antecedent.antecedent_grid`).
+    """
+    minx, miny, maxx, maxy = bbox
+
+    def axis(lo, hi):
+        n = max(2, int(np.ceil((hi - lo) / step_deg)) + 1)
+        return np.round(np.linspace(lo, hi, n), 4)
+
+    lons, lats = axis(minx, maxx), axis(miny, maxy)
+    if verbose:
+        print(f"  SILO forcing grid {len(lats)}x{len(lons)} "
+              f"({len(lats) * len(lons)} cells) @ {step_deg}deg ...", flush=True)
+
+    cols, times = [], None
+    for la in lats:
+        for lo in lons:
+            q = Query.from_lat_lon(lat=float(la), lon=float(lo), buffer_km=1.0,
+                                   start=sim_start, end=day,
+                                   stub=_tag("m8grid", f"{la:.4f}", f"{lo:.4f}",
+                                             sim_start, day))
+            s = _silo_series(q)
+            times = s.index if times is None else times
+            cols.append(s.reindex(times))
+    rain = np.column_stack([c[_RAIN].to_numpy() for c in cols])
+    pet = np.column_stack([c[_PET].to_numpy() for c in cols])
+    return rain, pet, lons, lats
+
+
+def predict_map(bbox, day, model=None, model_name: str = "model8",
+                step_deg: float = GRID_STEP_DEG, save: bool = True,
+                plot: bool = True, verbose: bool = True) -> xr.Dataset:
+    """A 30 m root-zone soil-moisture field over ``bbox`` for any ``day``.
+
+    The water balance runs on the ~``step_deg`` SILO forcing grid; the 30 m
+    structure comes from the per-pixel soil + terrain offsets. Returns an
+    ``xr.Dataset`` with ``sm_pred`` (%) and ``storage_mm``; when saved, paths
+    are recorded in ``ds.attrs['output_tif' / 'output_png']``.
+    """
+    day = _as_date(day)
+    model = _load(model, model_name)
+    if verbose:
+        print(WARNING, flush=True)
+
+    sim_start = _spinup_start(day)
+    q = Query(bbox=list(bbox), start=day, end=day,
+              stub=_tag("m8map", *[f"{v:.3f}" for v in bbox], day))
+
+    if verbose:
+        print("  terrain (30 m) ...", flush=True)
+    terr = terrain_covariates(q)
+    grid = terr["elevation"]
+    if verbose:
+        print("  SLGA soil ...", flush=True)
+    soil = soil_covariates(q)
+
+    rain, pet, lons, lats = _forcing_grid(bbox, sim_start, day, step_deg, verbose)
+    storage = _simulate(rain, pet, model)[-1].reshape(len(lats), len(lons))
+    coarse = (xr.DataArray(storage, coords={"y": lats, "x": lons}, dims=("y", "x"))
+              .rio.write_crs(4326))
+    fine = coarse.rio.reproject_match(grid, resampling=Resampling.bilinear)
+
+    src = {**{v: soil[v] for v in SOIL_VARS},
+           **{v: terr[v] for v in TERRAIN_STATIC_VARS}}
+    stat_cols = []
+    for v in STATIC_VARS:
+        a = src[v]
+        if a.rio.crs is None:
+            a = a.rio.write_crs(4326)
+        stat_cols.append(a.rio.reproject_match(grid, resampling=Resampling.nearest)
+                         .values.ravel())
+    S = np.column_stack(stat_cols)
+    stor = fine.values.ravel()
+
+    valid = np.isfinite(S).all(axis=1) & np.isfinite(stor)
+    pred = np.full(stor.shape, np.nan, dtype="float32")
+    if valid.any():
+        pred[valid] = model.readout(stor[valid], S[valid]).astype("float32")
+    if verbose:
+        print(f"  predicted {int(valid.sum()):,} pixels, mean "
+              f"{np.nanmean(pred):.1f}%", flush=True)
+
+    ds = xr.Dataset({"sm_pred": (grid.dims, pred.reshape(grid.shape)),
+                     "storage_mm": (grid.dims, fine.values.astype("float32"))},
+                    coords=grid.coords).rio.write_crs(grid.rio.crs)
+
+    if save:
+        outdir = Path(q.out_dir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        tif = outdir / f"soil_moisture_model8_{day}.tif"
+        ds["sm_pred"].rio.to_raster(tif)
+        ds.attrs["output_tif"] = str(tif)
+        if verbose:
+            print(f"  saved {tif}", flush=True)
+        if plot:
+            from emt.predict import plot_field
+            png = outdir / f"soil_moisture_model8_{day}.png"
+            plot_field(ds, png, title=f"Root-zone soil moisture, {day} (30 m, model8)")
+            ds.attrs["output_png"] = str(png)
+            if verbose:
+                print(f"  saved {png}", flush=True)
+    return ds
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Run model8 (process model) for any date: point series or 30 m map.")
+    ap.add_argument("--bbox", type=float, nargs=4, metavar=("W", "S", "E", "N"),
+                    help="map mode: lon/lat bounds (EPSG:4326)")
+    ap.add_argument("--date", help="map mode: YYYY-MM-DD")
+    ap.add_argument("--lat", type=float, help="point mode: latitude")
+    ap.add_argument("--lon", type=float, help="point mode: longitude")
+    ap.add_argument("--start", help="point mode: first day (YYYY-MM-DD)")
+    ap.add_argument("--end", help="point mode: last day (default: --start)")
+    ap.add_argument("--model", default="model8")
+    ap.add_argument("--step-deg", type=float, default=GRID_STEP_DEG,
+                    help="map mode: forcing-grid spacing (default %(default)s)")
+    ap.add_argument("-o", "--out", default=None,
+                    help="also write the GeoTIFF (map) or CSV (point) here")
+    ap.add_argument("--no-plot", action="store_true", help="map mode: skip the PNG")
+    a = ap.parse_args()
+
+    if a.bbox and a.date:
+        ds = predict_map(tuple(a.bbox), a.date, model_name=a.model,
+                         step_deg=a.step_deg, plot=not a.no_plot)
+        print(f"wrote {ds.attrs['output_tif']}")
+        if "output_png" in ds.attrs:
+            print(f"wrote {ds.attrs['output_png']}")
+        if a.out:
+            Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+            ds["sm_pred"].rio.to_raster(a.out)
+            print(f"also wrote {a.out}")
+    elif a.lat is not None and a.lon is not None and a.start:
+        s = predict_point(a.lat, a.lon, a.start, a.end, model_name=a.model)
+        print(s.to_string(index=False) if len(s) <= 20 else s.head(10).to_string(index=False))
+        if a.out:
+            Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+            s.to_csv(a.out, index=False)
+            print(f"wrote {a.out}")
+    else:
+        ap.error("give either --bbox with --date (map), or --lat/--lon/--start (point)")
+
+
+if __name__ == "__main__":
+    main()

@@ -57,9 +57,60 @@ Held-out predicted-vs-observed time series for every station
   worse per-station (median NSE +0.05 vs +0.22); the terrain trio earns its
   place alongside soil.
 
+## Run it for any date
+
+The fitted model ships in the repo (`data/models/model8.joblib`, 6 KB — it is
+13 numbers plus the standardisation constants), and
+[`emt/model8/predict.py`](../../emt/model8/predict.py) applies it **anywhere in
+Australia, for any day**, as a point series or a 30 m map:
+
+```bash
+# daily series at a point, any date range
+PYTHONPATH=. python -m emt.model8.predict \
+    --lat -35.05 --lon 147.5 --start 2025-06-01 --end 2025-06-10
+
+# 30 m map for one day
+PYTHONPATH=. python -m emt.model8.predict \
+    --bbox 147.30 -35.52 147.62 -35.10 --date 2024-09-15
+```
+
+```python
+from emt.model8.predict import predict_point, predict_map
+s  = predict_point(lat=-35.05, lon=147.5, start="2024-01-01", end="2024-12-31")
+ds = predict_map(bbox=(147.30, -35.52, 147.62, -35.10), day="2024-09-15")
+ds["sm_pred"]        # 30 m root-zone soil moisture (%)
+```
+
+**Why any date works without retraining.** model8 has no lookback *features* —
+it has a *state*. To predict day D the bucket is run forward from a spin-up
+start to D on SILO rain/PET, so 2006 and last week cost the same and need no
+SMIPS at all (unlike [`emt/predict.py`](predict.py.md), which must assemble the
+SMIPS lookback for the day). Spin-up defaults to two years, comfortably beyond
+the fitted recession's ~5-month memory; a station cross-check confirms the
+inference path reproduces the training path to machine precision (max |Δ|
+0.0000 % at K5, independent spin-ups).
+
+The map is a genuine downscaling of the same kind the repo does elsewhere: the
+**water balance runs on the ~5 km SILO forcing grid** — the scale at which
+weather actually varies — and the **30 m structure comes from the per-pixel
+soil and terrain offsets**. Outputs are a GeoTIFF plus a quick-look PNG in the
+AOI's PaddockTS query dir; `--step-deg` tunes the forcing grid, `-o` writes an
+extra copy.
+
+Kyeamba on 2024-09-15 — 1.6 M pixels from the command above, a date fourteen
+years past the training period:
+
+![model8 30 m field over Kyeamba, 2024-09-15](../figures/model8_predict_example.png)
+
+Drainage lines and valley floors sit wet, ridges and the steep north-western
+block dry — the TWI and slope terms doing visible work, with SLGA map-unit
+boundaries showing as the broader patches. Costs on a first run are the 30
+cached SILO cell downloads (~2 years each) plus terrain and soil for the AOI;
+later days over the same area reuse all of it.
+
 ## Data & running
 
-model8 reads the same inputs as model7 plus
+Retraining (not needed to predict) reads the same inputs as model7 plus
 `data/process_soil_statics.csv`, all built by
 [`emt/model7/build.py`](../../emt/model7/build.py) — the soil step needs a
 **TERN API key** in `~/.config/PaddockTS.json` and is skipped with a notice

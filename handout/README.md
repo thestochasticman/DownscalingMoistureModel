@@ -56,6 +56,7 @@ then apply it. Each item links to a self-contained page.
 |---|---|---|
 | 16 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
 | 17 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
+| 18 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
 
 ## The model
 

@@ -73,6 +73,16 @@ ds["sm_pred"]                                              # 30 m soil moisture 
 SMIPS and SILO (a few minutes), cached for later days. See
 [`handout/modules/predict.py.md`](handout/modules/predict.py.md) for full details.
 
+The process model ships too, and needs no SMIPS — it runs forward from a
+spin-up to **any date**, as a point series or a 30 m map:
+
+```bash
+PYTHONPATH=. python -m emt.model8.predict --lat -35.05 --lon 147.5 \
+    --start 2025-06-01 --end 2025-06-10                       # daily series
+PYTHONPATH=. python -m emt.model8.predict \
+    --bbox 147.30 -35.52 147.62 -35.10 --date 2024-09-15      # 30 m map
+```
+
 > ⚠️ The shipped model is trained and validated **only** in the Murrumbidgee
 > catchment. Run elsewhere and it still produces a field, but with an uncorrected
 > per-site level bias and no out-of-region validation — treat off-catchment output
@@ -97,7 +107,8 @@ emt/
   evaluation.py     leave-site-out cross-validation + metrics
   model1..model6/   estimator packages (each: FEATURES, build_estimator, fit)
   model7/           process model: calibrated bucket water balance (no ML)
-  model8/           model7 + SLGA soil offsets (process model at ML parity)
+  model8/           model7 + SLGA soil offsets; model8/predict.py runs it for
+                    any date (point series or 30 m map), no SMIPS needed
   persist.py        fit-once model + out-of-fold prediction caching
   downscale.py      model-agnostic per-pixel application → 30 m field
   predict.py        clone-and-run inference tool (Python function + CLI)
