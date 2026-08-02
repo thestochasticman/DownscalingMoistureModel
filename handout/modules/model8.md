@@ -85,10 +85,32 @@ ds["sm_pred"]        # 30 m root-zone soil moisture (%)
 it has a *state*. To predict day D the bucket is run forward from a spin-up
 start to D on SILO rain/PET, so 2006 and last week cost the same and need no
 SMIPS at all (unlike [`emt/predict.py`](predict.py.md), which must assemble the
-SMIPS lookback for the day). Spin-up defaults to two years, comfortably beyond
-the fitted recession's ~5-month memory; a station cross-check confirms the
-inference path reproduces the training path to machine precision (max |Δ|
-0.0000 % at K5, independent spin-ups).
+SMIPS lookback for the day). A station cross-check confirms the inference path
+reproduces the training path to machine precision (max |Δ| 0.0000 % at K5,
+independent spin-ups).
+
+**The spin-up, precisely.** Simulation starts on **1 January, two calendar
+years before your start date** — so a June 2025 request simulates from January
+2023, about 2.4 years of lead-in. That window exists only to wash out the
+arbitrary initial condition (`S = 0.5 · smax`); it is **not** a limit on which
+dates you can predict, and it does not need in-situ data. Its only real cost is
+fetch time on a cold run, since in map mode every forcing cell pulls that many
+years of SILO.
+
+Two years is deliberately generous. Holding the forcing fixed and varying only
+the spin-up, at one Murrumbidgee point for 2025-06-01:
+
+| Spin-up | 0.25 yr | 0.5 yr | 1 yr | 2 yr | 4 yr | 10 yr |
+|---|---|---|---|---|---|---|
+| Storage (mm) | 43.28 | 40.68 | 40.68 | 40.68 | 40.68 | 40.68 |
+| Predicted VWC (%) | 17.724 | 17.473 | 17.473 | 17.473 | 17.473 | 17.473 |
+
+Everything from **six months** out is identical to a ten-year spin-up; only the
+three-month run drifts (+0.25 %). That is exactly what the fitted recession
+predicts — `k = 0.0073/day` is a 137-day (4.6-month) e-folding — so the default
+carries roughly a 4× margin. Lower `SPINUP_YEARS` to 1 in
+[`predict.py`](../../emt/model8/predict.py) for faster cold starts; it still
+leaves a 2× margin.
 
 The map is a genuine downscaling of the same kind the repo does elsewhere: the
 **water balance runs on the ~5 km SILO forcing grid** — the scale at which

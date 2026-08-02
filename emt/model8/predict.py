@@ -12,9 +12,25 @@ or from the command line::
 **Why a process model can answer for any date.** model8 carries no lookback
 *features*; it carries a *state*. To predict day D the bucket is simply run
 forward from a spin-up start to D on SILO rain/PET -- so the same fitted model
-serves 2006 or last week, with no retraining and no SMIPS. Spin-up defaults to
-two years before the requested period, comfortably longer than the fitted
-store's memory (recession k gives an e-folding time of ~5 months).
+serves 2006 or last week, with no retraining and no SMIPS.
+
+**Spin-up.** The simulation starts at ``SPINUP_YEARS`` calendar years before the
+requested period (see :func:`_spinup_start`) purely to wash out the arbitrary
+initial condition ``S = 0.5 * smax``. It is *not* a limit on which dates can be
+predicted -- any date SILO covers works; it only sets how much forcing is
+fetched ahead of the target. Measured convergence at one Murrumbidgee point
+(target 2025-06-01, same forcing, varying spin-up):
+
+    spin-up   0.25 yr   0.5 yr   1 yr     2 yr     4 yr     10 yr
+    storage   43.28mm   40.68    40.68    40.68    40.68    40.68
+    VWC       17.724%   17.473   17.473   17.473   17.473   17.473
+
+Everything from six months out is identical to a ten-year spin-up; only the
+three-month run is off (+0.25 % VWC). That matches the fitted recession
+``k = 0.0073/day`` (a 137-day e-folding), so the default carries a ~4x margin
+over what convergence needs. The cost is fetch time on a first run -- in map
+mode every forcing cell pulls that many years -- so lowering it to 1 is safe if
+you want faster cold starts.
 
 The 30 m map is a genuine downscaling: the water balance runs on the SILO
 forcing grid (~5 km, the scale at which weather actually varies), and the
@@ -53,7 +69,7 @@ from emt.slga import soil_covariates, SOIL_VARS
 WARNING = ("NOTE: model8 is calibrated on the Murrumbidgee catchment; predictions "
            "elsewhere are plausible but UNVALIDATED. Treat as indicative.")
 
-SPINUP_YEARS = 2          # >> the bucket's ~5-month memory, so day 1 is unbiased
+SPINUP_YEARS = 2          # ~4x the 6-month convergence point (see the docstring)
 GRID_STEP_DEG = 0.1       # forcing-grid spacing for maps (SILO's native is 0.05)
 
 _RAIN, _PET = "daily_rain", "et_morton_potential"
@@ -64,6 +80,12 @@ def _as_date(d) -> _date:
 
 
 def _spinup_start(start: _date) -> _date:
+    """First simulated day: 1 January, ``SPINUP_YEARS`` calendar years back.
+
+    Snapping to 1 January means the actual lead-in is between ``SPINUP_YEARS``
+    and ``SPINUP_YEARS + 1`` years (a June start gets ~2.4), and keeps the
+    Query stub -- hence the SILO cache -- shared by every request in a year.
+    """
     return _date(start.year - SPINUP_YEARS, 1, 1)
 
 
