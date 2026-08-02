@@ -11,6 +11,8 @@ Outputs (``data/``, gitignored like every other table)::
     process_target_2006_2010.csv     station-day root-zone VWC (the target)
     process_forcing_2005_2010.csv    per-station daily rain / PET / VPD
     process_terrain_statics.csv      per-station TERRAIN_VARS at the point
+    process_soil_statics.csv         per-station SLGA SOIL_VARS (needs a TERN
+                                     key; skipped with a notice if absent)
 
 Run::  PYTHONPATH=. python -m emt.model7.build
 """
@@ -31,6 +33,7 @@ from PaddockTS.query import Query
 TARGET_CSV = "data/process_target_2006_2010.csv"
 FORCING_CSV = "data/process_forcing_2005_2010.csv"
 STATICS_CSV = "data/process_terrain_statics.csv"
+SOIL_CSV = "data/process_soil_statics.csv"
 
 
 def build_target(start: date = DEFAULT_START, end: date = DEFAULT_END,
@@ -112,6 +115,30 @@ def build_terrain_statics(stations: list[str], start: date = DEFAULT_START,
     return statics
 
 
+def build_soil_statics(stations: list[str], start: date = DEFAULT_START,
+                       end: date = DEFAULT_END,
+                       out: str | None = SOIL_CSV) -> pd.DataFrame:
+    """Sample SLGA SOIL_VARS at each station point (needs a TERN API key)."""
+    from emt.slga import SOIL_VARS, soil_covariates
+    coords = fetch_station_coords(stations).set_index("station")
+    rows = []
+    for stn in stations:
+        lat, lon = float(coords.loc[stn, "lat"]), float(coords.loc[stn, "lon"])
+        q = query_for_station(stn, lat, lon, start, end)
+        try:
+            soil = soil_covariates(q)
+            row = {"station": stn}
+            for v in SOIL_VARS:
+                row[v] = float(sample_points(soil[v], lon, lat).values)
+            rows.append(row)
+        except Exception as e:                              # noqa: BLE001
+            print(f"  soil {stn}: FAIL {type(e).__name__}: {e}", flush=True)
+    statics = pd.DataFrame(rows)
+    if out and len(statics):
+        statics.to_csv(out, index=False)
+    return statics
+
+
 def build(start: date = DEFAULT_START, end: date = DEFAULT_END) -> None:
     print("=== target (OzNet) ===", flush=True)
     daily = build_target(start, end)
@@ -123,6 +150,14 @@ def build(start: date = DEFAULT_START, end: date = DEFAULT_END) -> None:
     print("=== terrain statics (Copernicus DEM) ===", flush=True)
     statics = build_terrain_statics(stations, start, end)
     print(f"  {len(statics)} stations", flush=True)
+    print("=== soil statics (SLGA) ===", flush=True)
+    from PaddockTS.config import config
+    if not config.tern_api_key:
+        print("  no TERN API key in ~/.config/PaddockTS.json -- skipped "
+              "(model7 then runs without the soil variants)", flush=True)
+    else:
+        soil = build_soil_statics(stations, start, end)
+        print(f"  {len(soil)} stations", flush=True)
 
 
 if __name__ == "__main__":

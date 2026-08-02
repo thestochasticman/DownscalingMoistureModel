@@ -15,7 +15,14 @@ __pycache__/
 
 # os
 .DS_Store
+._*
 
-# local secrets and generated WeatherLink validation products
+# local secrets
 .secrets/
-weatherlink_validation/outputs/
+
+# validation work and reports are kept outside this repo (they carry
+# machine-specific absolute paths and reference non-public field data)
+/reports/
+/scripts/
+/soilmoisture_points_validation/
+/weatherlink_validation/
