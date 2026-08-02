@@ -18,16 +18,19 @@ capacity runs off. The five global parameters (``smax``, ``alpha``, ``k``,
 ``fit`` -- the process-model analogue of estimator training -- so the model runs
 through the **identical leave-site-out harness** as models 1-6.
 
-What this buys and costs, by construction:
+This is the foundation of the repo's **process-model track** -- predicting by
+simulation with parameters you can read, no training table, and no dependence
+on SMIPS (:mod:`emt.model8`, the same bucket with SLGA soil in the offset
+stage, is the track's recommended configuration). By construction:
 
-* **No SMIPS, no soil, no terrain, no ML**: an independent physical baseline
-  that answers "how much of model6's skill is just water-balance bookkeeping?".
+* **No SMIPS, no soil, no terrain in the state equation, no ML**: forcing in,
+  physics through, moisture out.
 * Parameters are global, so between-station level differences can come only
-  from the forcing (~5 km SILO); the per-station level bias that the ML models
-  fight is expected here in its purest form.
+  from the forcing (~5 km SILO); cross-site level ranking needs the offset
+  stage below.
 * Optional per-station static offsets (e.g. terrain TWI/slope, passed as
-  ``static``) shift the readout linearly -- the process-model seat for the
-  within-cell redistribution signal the ML models learn from covariates.
+  ``static``) shift the readout linearly -- the seat where national covariates
+  add between-site structure without touching the physics.
 
 The forcing store is continuous daily rain/PET per station from
 ``data/process_forcing_2005_2010.csv`` (SILO, fetched one year before the study
@@ -65,17 +68,20 @@ _RAIN, _PET = "daily_rain", "et_morton_potential"
 # --------------------------------------------------------------------------- #
 # Simulation core
 # --------------------------------------------------------------------------- #
-def _step_loop(rain: np.ndarray, pet: np.ndarray, smax: float, alpha: float,
+def _step_loop(rain: np.ndarray, pet: np.ndarray, smax: np.ndarray, alpha: float,
                k: float) -> np.ndarray:
-    """Daily bucket recurrence over a (days, stations) forcing block -> storage."""
+    """Daily bucket recurrence over a (days, stations) forcing block -> storage.
+
+    ``smax`` is per-station (a constant vector in the base configuration).
+    """
     n_days, n_st = rain.shape
     out = np.empty((n_days, n_st))
-    s = np.full(n_st, 0.5 * smax)
+    s = 0.5 * smax
     denom = alpha * smax
     for t in range(n_days):
         s = s + rain[t]
         aet = pet[t] * np.minimum(1.0, s / denom)
-        s = np.clip(s - aet - k * s, 0.0, smax)
+        s = np.minimum(np.maximum(s - aet - k * s, 0.0), smax)
         out[t] = s
     return out
 
@@ -121,10 +127,18 @@ class Forcing:
             raise KeyError(f"no forcing for station(s): {missing}")
         return rows, cols.to_numpy(dtype=int)
 
-    def vwc(self, x: np.ndarray) -> np.ndarray:
-        """Simulate all stations and map storage -> volumetric %."""
+    def vwc(self, x: np.ndarray, cap_rel: np.ndarray | None = None) -> np.ndarray:
+        """Simulate all stations and map storage -> volumetric %.
+
+        ``cap_rel`` (optional, per-station, mean 1 over the training stations)
+        scales the capacity: ``smax_i = smax * cap_rel_i``. The readout keeps
+        the *global* ``smax`` as its mm->% denominator, so higher-capacity
+        stations can genuinely sit wetter -- this is where a soil covariate
+        (e.g. SLGA AWC) injects between-station level structure physically.
+        """
         smax, alpha, k, theta_r, dtheta = x
-        storage = _step_loop(self.rain, self.pet, smax, alpha, k)
+        smax_i = np.full(self.rain.shape[1], smax) if cap_rel is None else smax * cap_rel
+        storage = _step_loop(self.rain, self.pet, smax_i, alpha, k)
         return theta_r + dtheta * storage / smax
 
 
@@ -153,13 +167,22 @@ class BucketEstimator:
     station's level offset then comes from its *own* covariate values, never
     from its observations. (Plain least squares here overfits the handful of
     training-station levels and transfers badly -- the ridge is essential.)
+
+    ``capacity`` (optional): per-station relative bucket capacity (index =
+    station; units cancel -- e.g. SLGA available water capacity). Normalised to
+    mean 1 over the training stations and multiplied onto ``smax``, while the
+    readout keeps the global ``smax`` denominator, so higher-capacity soils
+    genuinely sit wetter: the physical route for a soil covariate to carry
+    between-station level structure.
     """
 
     def __init__(self, forcing: Forcing | None = None,
                  static: pd.DataFrame | None = None,
+                 capacity: pd.Series | None = None,
                  n_starts: int = 3, maxfev: int = 800, seed: int = 0):
         self.forcing = forcing
         self.static = static
+        self.capacity = capacity
         self.n_starts = n_starts
         self.maxfev = maxfev
         self.seed = seed
@@ -180,6 +203,14 @@ class BucketEstimator:
         rows, cols = f.index(X)
         yv = np.asarray(y, dtype=float)
 
+        # Per-station capacity (e.g. SLGA AWC): normalised to mean 1 over the
+        # *training* stations, applied to every station from its own value.
+        self._cap_rel = None
+        if self.capacity is not None:
+            cap = self.capacity.reindex(f.stations).to_numpy(dtype=float)
+            train_mean = self.capacity.loc[X["station"].unique()].mean()
+            self._cap_rel = cap / float(train_mean)
+
         # Stage 1: calibrate the 5 bucket parameters (statics play no part).
         lo = np.array([b[0] for b in BOUNDS])
         hi = np.array([b[1] for b in BOUNDS])
@@ -187,7 +218,7 @@ class BucketEstimator:
         def loss(x: np.ndarray) -> float:
             if (x < lo).any() or (x > hi).any():
                 return 1e6 + float(np.abs(np.clip(x, lo, hi) - x).sum())
-            err = f.vwc(x)[rows, cols] - yv
+            err = f.vwc(x, self._cap_rel)[rows, cols] - yv
             return float(np.sqrt(np.nanmean(err ** 2)))
 
         rng = np.random.default_rng(self.seed)
@@ -210,7 +241,7 @@ class BucketEstimator:
             self._static_vars = list(self.static.columns)
             resid = pd.DataFrame({
                 "station": np.asarray(X["station"]),
-                "err": yv - f.vwc(x)[rows, cols],
+                "err": yv - f.vwc(x, self._cap_rel)[rows, cols],
             }).groupby("station")["err"].mean()              # one sample/station
             ref = self.static.loc[resid.index, self._static_vars]
             self._static_mean = ref.mean().to_numpy(dtype=float)
@@ -230,7 +261,7 @@ class BucketEstimator:
             raise RuntimeError("fit before predict")
         rows, cols = self._forcing().index(X)
         x = self.params_.to_numpy()
-        pred = self._forcing().vwc(x[:5])[rows, cols]
+        pred = self._forcing().vwc(x[:5], self._cap_rel)[rows, cols]
         if self.static is not None:
             pred = pred + self._static_matrix(X["station"]) @ x[5:-1] + x[-1]
         return pred

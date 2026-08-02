@@ -21,18 +21,16 @@ leave-site-out skill **doubles to parity with the ML models**:
 | Median per-station \|bias\| | 3.98 % | **3.64 %** | 3.85 % |
 
 (Same caveat as model7: the model6 column is the published 36-station
-reference, not a same-rows rerun.) Read the table as the completion of
-model7's decomposition: the bucket supplies the temporal signal (r 0.83,
-unchanged), the soil maps supply the between-site level ranking — and with
-both in place a **13-parameter interpretable model matches a tuned
+reference, not a same-rows rerun.) The bucket supplies the temporal signal
+(r 0.83, unchanged), the soil maps supply the between-site level ranking — and
+with both in place a **13-parameter interpretable model matches a tuned
 gradient-boosting model pooled (+0.40 vs +0.38) while beating it clearly
 per-station (median NSE +0.22 vs −0.19)**.
 
-This is the process-side confirmation of [model6's feature
-importance](model6.md#feature-importance), reached from an independent
-direction: there the ML model, given 25 covariates, put SLGA soil on top; here
-adding the same four soil layers to a physics readout recovers the same skill.
-The level problem was information-limited, and the information is soil.
+That both tracks converge on soil — the ML track through [feature
+importance](model6.md#feature-importance), the process track through what
+unlocks its level ranking — is strong independent evidence the signal is real
+and physical, not an artefact of either method.
 
 ![model8 results](../figures/model8_results.png)
 
@@ -74,14 +72,14 @@ PYTHONPATH=. python -m emt.model8.model data/process_target_2006_2010.csv
 
 ## Status
 
-model8 is the recommended **process-model** configuration; model7 stays as the
-covariate-free baseline that isolates what the bucket alone explains. Against
-the ML track it is a genuine alternative rather than a diagnostic: pooled
-parity with [model6](model6.md), better per-station medians, 13 interpretable
-parameters, and no training table — but it has no SMIPS consistency and, like
-every model here, no temporal hold-out and no validation outside the
-Murrumbidgee. The natural next step is the hybrid flagged in model7: bucket
-storage as a model6 feature, or SMIPS assimilated into the bucket.
+model8 is the **recommended model of the process track** ([model7](model7.md)
+stays as its covariate-free foundation) and a full peer of
+[model6](model6.md): pooled parity, better per-station medians, 13
+interpretable parameters, no training table, and no dependence on SMIPS at
+all. Its caveats are the shared ones — no temporal hold-out, no validation
+outside the Murrumbidgee. The two tracks fail differently, which is what makes
+the hybrid flagged in model7 (bucket storage as an ML feature, or SMIPS
+assimilated into the bucket) the natural next step.
 
 ---
 <!-- NAV -->

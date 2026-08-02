@@ -24,8 +24,10 @@ models 1–6 (`FEATURES = ["station", "time"]` are keys into a continuous daily
 forcing store, not covariates). Simulation starts 2005-01-01 at half capacity,
 one full spin-up year before any scored date.
 
-The question it answers: **how much of the ML models' skill is just
-water-balance bookkeeping** — and how much genuinely needs the covariates?
+This opens a second, parallel track: predict soil moisture from first
+principles, with parameters you can read, no training table, and no dependence
+on the product being downscaled. model7 is that track's foundation;
+[model8](model8.md) is its recommended configuration.
 
 | Metric (37 stations, 2006–2010, leave-site-out) | bucket only | **+ terrain offsets** | model6 (36 stn) |
 |---|---|---|---|
@@ -40,14 +42,13 @@ gaps, so its table has one station more than the ML models'. Read the model6
 column as a reference, not a same-rows comparison.)
 
 **The split is stark.** On *within-station temporal skill* the 5-parameter
-bucket matches the 25-feature gradient-boosting model: median per-station r
-0.83 vs 0.81, median per-station NSE −0.03 vs −0.19, positive-NSE stations
-17/37 vs 16/36. On the *pooled* score — which rewards ranking sites against
-each other — it reaches less than half of model6 (+0.18 vs +0.38). Most of the
-year-to-year moisture signal at a point **is** water-balance bookkeeping;
-what the covariates (chiefly SLGA soil, see
-[model6's importance](model6.md#feature-importance)) buy is the **between-site
-level structure** that a globally-parameterised process model cannot express.
+bucket already matches the 25-feature gradient-boosting model: median
+per-station r 0.83 vs 0.81, median per-station NSE −0.03 vs −0.19,
+positive-NSE stations 17/37 vs 16/36. Rain minus evapotranspiration through a
+single store captures most of the year-to-year moisture signal at a point. What
+a globally-parameterised bucket cannot yet express is **between-site level
+structure** — that is exactly the seat the offset stage provides, and filling
+it with soil is what turns model7 into [model8](model8.md).
 
 ![model7 results](../figures/model7_results.png)
 
@@ -98,21 +99,20 @@ Two negative results shaped this design, both worth keeping:
 The fitted coefficients have physical signs: wetter at high TWI (+0.71 % per
 sd), drier on steeper slopes (−0.81), slightly drier with elevation (−0.23).
 
-## What this says about the ML models
+## Where the two tracks differ
 
-1. **model6's per-station dynamics are not evidence of learned physics** — a
-   5-parameter bucket reproduces them from rain and PET alone. The ML models
-   earn their keep on the cross-site problem, not the temporal one.
-2. **The level problem is information-limited, not model-limited.** Neither a
-   histogram-gradient-boosting model with 25 covariates nor a process model
-   with terrain offsets ranks unseen sites well; model6's advantage rides on
-   SLGA soil. A process route to the same information exists, and
-   [**model8**](model8.md) takes it: the same bucket with SLGA soil in the
-   offset stage reaches pooled parity with model6.
-3. **A hybrid is the natural continuation**: bucket storage (or its anomaly) as
-   a *feature* for the ML models, or SMIPS assimilated into the bucket — the
-   two models fail differently, and the progress report's §5.5 hybrid
-   recommendation points the same way.
+1. **Per-station dynamics need no covariates** — a 5-parameter bucket
+   reproduces them from rain and PET alone. Both tracks agree the hard problem
+   is cross-site, not temporal.
+2. **The level problem is information-limited, not model-limited.** With
+   terrain offsets alone, unseen-site ranking stays weak — for the process
+   track just as for the ML track. The information that unlocks it is soil:
+   [**model8**](model8.md) adds SLGA to the offset stage and the ranking
+   follows.
+3. **The tracks can feed each other**: bucket storage (or its anomaly) as a
+   feature for the ML models, or SMIPS assimilated into the bucket — they fail
+   differently, and the progress report's §5.5 hybrid recommendation points
+   the same way.
 
 ## Data & running
 
@@ -135,13 +135,13 @@ leave-site-out pass takes ~90 s.
 
 ## Status
 
-model7 is a **diagnostic baseline, not a replacement**: [model6](model6.md)
-remains the recommended mapping model. Its value is the decomposition — it
-isolates how much skill needs no covariates at all (most of the temporal
-signal), pins the ML models' real contribution to the between-site level
-problem, and provides an ML-free reference any future model must beat. Applying
-it as a 30 m field would need the terrain-offset readout on the DEM grid plus
-gridded SILO forcing (both national), but a map is not its point.
+model7 is the process track's **covariate-free foundation**. It stands on its
+own — five interpretable parameters, national public forcing, no training
+table, no SMIPS — and it establishes that the track's temporal skill is
+already at ML level before any covariate enters. Its recommended successor is
+[model8](model8.md), which adds the soil information the level problem needs.
+Applying either as a 30 m field needs the offset readout on the DEM grid plus
+gridded SILO forcing — both national products.
 
 ---
 <!-- NAV -->

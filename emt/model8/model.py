@@ -10,11 +10,14 @@ the pooled leave-site-out skill, to parity with the ML models:
     model7 (terrain only)   pooled NSE +0.18   median station NSE -0.03
     model8 (+ SLGA soil)    pooled NSE +0.40   median station NSE +0.22
 
-This is the process-side confirmation of model6's feature-importance finding:
-the between-site *level* structure the ML models learn lives in the soil maps.
-Soil enters here exactly as terrain does -- a ridge-regularised per-station
-readout offset fitted on training-station mean residuals -- so a held-out
-station's level comes from its own SLGA values, never its observations.
+This is the **recommended model of the process track**: pooled parity with the
+ML track's model6 (+0.40 vs +0.38 published), clearly better per-station
+medians, 13 interpretable parameters, and no training table. That both tracks
+independently land on soil as the between-site level information is strong
+evidence the signal is physical. Soil enters here exactly as terrain does -- a
+ridge-regularised per-station readout offset fitted on training-station mean
+residuals -- so a held-out station's level comes from its own SLGA values,
+never its observations.
 
 Tested and not defaulted: SLGA AWC as *per-station bucket capacity*
 (``capacity=`` on the estimator, the physically-motivated route). Its LOSO

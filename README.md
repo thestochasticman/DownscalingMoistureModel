@@ -117,11 +117,12 @@ PYTHONPATH=. python -m emt.build_dataset
 generalisation that matters, since inference happens at pixels with no sensor. Six
 models were developed (`model1`…`model6`), from a Random Forest baseline to the
 recommended `model6` (regularised histogram gradient boosting + SMIPS lookback +
-soil + antecedent meteorology); `model7` adds a **process-model** baseline (a
-calibrated daily bucket water balance driven by SILO rain/PET — no machine
-learning, no SMIPS) evaluated under the same leave-site-out harness, and
-`model8` (model7 + SLGA soil offsets) brings the process track to pooled
-parity with `model6`. `persist.py` caches fits and out-of-fold
+soil + antecedent meteorology); A parallel
+**process-model track** predicts by simulation instead: `model7` is a
+calibrated daily bucket water balance driven by SILO rain/PET (no machine
+learning, no SMIPS) and `model8` adds SLGA soil offsets — evaluated under the
+same leave-site-out harness, model8 matches model6's pooled skill (+0.40)
+with better per-station medians. `persist.py` caches fits and out-of-fold
 predictions so figures rebuild in seconds.
 
 **3 · Apply.** `downscale.py` applies a fitted model per 30 m pixel over an AOI

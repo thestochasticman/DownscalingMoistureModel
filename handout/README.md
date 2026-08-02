@@ -47,8 +47,8 @@ then apply it. Each item links to a self-contained page.
 | 11 | [model4 · SMIPS lookback + soil](modules/model4.md) | +0.17 (30-stn) → +0.31 (with M-sites) |
 | 12 | [model5 · Soil smoothing](modules/model5.md) | A documented tradeoff, not recommended |
 | 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + weather (pooled NSE +0.38) |
-| 14 | [model7 · Process model](modules/model7.md) | No-ML bucket water balance — matches model6's per-station dynamics (r 0.83), pooled NSE +0.18 |
-| 15 | [model8 · Process model + SLGA soil](modules/model8.md) | model7's bucket + soil offsets — **ML parity** (pooled NSE +0.40, median station NSE +0.22) |
+| 14 | [model7 · Process model](modules/model7.md) | The process track's foundation: bucket water balance, no ML (median station r 0.83) |
+| 15 | [model8 · Process model + SLGA soil](modules/model8.md) | **Recommended process model** — pooled NSE +0.40, median station NSE +0.22 |
 
 **3 · Applying the model**
 
