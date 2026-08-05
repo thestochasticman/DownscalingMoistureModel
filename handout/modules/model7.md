@@ -90,11 +90,15 @@ Two negative results shaped this design, both worth keeping:
   stations and transfer badly. The ridge (fitted α ≈ 46 — heavy shrinkage) is
   what makes the offsets honest, and its gain is correspondingly modest:
   pooled +0.15 → +0.18, median per-station NSE −0.08 → −0.03.
-* **Climate normals don't transfer.** Per-station climatological statics from
-  the same forcing (mean annual rain, PET, aridity P/PET) were tested in the
-  same slot and *reduced* pooled skill (+0.12 with aridity, +0.04 with all
-  three) — at these scales the forcing already carries that information
-  dynamically, and the normals act as weak station identifiers.
+* **Climate normals don't transfer** *under station-out CV*. Per-station
+  climatological statics from the same forcing (mean annual rain, PET, aridity
+  P/PET) were tested in the same slot and *reduced* pooled skill (+0.12 with
+  aridity, +0.04 with all three) — a held-out station's cluster neighbours
+  carry its climate into training, so the normals add nothing and act as weak
+  station identifiers. **This result inverts under blocked validation**, where
+  the held-out block's climate is absent from training and aridity becomes the
+  missing level signal — see the
+  [reconciliation](blocked_validation.md#reconciling-with-model7s-rejection-of-climate-normals).
 
 The fitted coefficients have physical signs: wetter at high TWI (+0.71 % per
 sd), drier on steeper slopes (−0.81), slightly drier with elevation (−0.23).

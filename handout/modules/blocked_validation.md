@@ -128,6 +128,31 @@ fail M7. This per-block complementarity is the strongest evidence yet for the
 hybrid flagged in [model7](model7.md) (bucket storage as an ML feature, or
 SMIPS assimilated into the bucket).
 
+## Reconciling with model7's rejection of climate normals
+
+[model7's page](model7.md#per-station-terrain-offsets-two-stage-ridge)
+documents a negative result that appears to contradict finding 3: climate
+normals (mean rain, PET, **aridity**) were tested in the same offset slot and
+*reduced* station-out skill. That result is real and **replicates on model8**
+— the contradiction is between harnesses, not results:
+
+| model8 config | station-out pooled / stn-median | blocked pooled / block-median |
+|---|---|---|
+| published (soil + terrain) | **+0.397 / +0.22** | +0.222 / +0.25 |
+| + aridity | +0.388 / +0.13 | +0.256 / +0.23 |
+| + aridity + weights | +0.403 / +0.13 | **+0.290 / +0.27** |
+
+Under **station-out**, a held-out station's cluster neighbours — with its
+climate — are in training, so a climate normal adds no new information and
+acts as a weak cluster identifier the ridge can misuse: mild harm, exactly as
+model7 found. Under **blocked** hold-out the station's climate is *absent*
+from training, and the normal is the only channel telling the readout "this is
+wetter/drier country than anywhere you trained": consistent gain. Whether
+aridity belongs in the statics is therefore not a fixed fact about the model —
+it depends on which deployment the validation is standing in for, which is
+why adopting it is a genuine trade (interpolation station-median −0.09,
+transfer pooled +0.07) rather than a free win.
+
 ## Implications
 
 * **The honest headline for a national product is the blocked one:** model8
