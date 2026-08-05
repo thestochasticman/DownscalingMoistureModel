@@ -198,10 +198,11 @@ class BucketEstimator:
         return (vals - self._static_mean) / self._static_std
 
     # -- sklearn surface ---------------------------------------------------- #
-    def fit(self, X: pd.DataFrame, y) -> "BucketEstimator":
+    def fit(self, X: pd.DataFrame, y, sample_weight=None) -> "BucketEstimator":
         f = self._forcing()
         rows, cols = f.index(X)
         yv = np.asarray(y, dtype=float)
+        w = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
 
         # Per-station capacity (e.g. SLGA AWC): normalised to mean 1 over the
         # *training* stations, applied to every station from its own value.
@@ -219,7 +220,10 @@ class BucketEstimator:
             if (x < lo).any() or (x > hi).any():
                 return 1e6 + float(np.abs(np.clip(x, lo, hi) - x).sum())
             err = f.vwc(x, self._cap_rel)[rows, cols] - yv
-            return float(np.sqrt(np.nanmean(err ** 2)))
+            if w is None:
+                return float(np.sqrt(np.nanmean(err ** 2)))
+            m = np.isfinite(err)
+            return float(np.sqrt(np.sum(w[m] * err[m] ** 2) / np.sum(w[m])))
 
         rng = np.random.default_rng(self.seed)
         x0 = np.array(X0)
@@ -235,20 +239,32 @@ class BucketEstimator:
         names, values = list(PARAM_NAMES), list(x)
         self.rmse_ = float(best.fun)
 
-        # Stage 2: ridge the per-station mean residual on the statics.
+        # Stage 2: ridge the per-station mean residual on the statics. With
+        # sample weights, both the per-station residual and each station's vote
+        # in the ridge are weighted, so the two stages optimise the same loss.
         if self.static is not None:
             from sklearn.linear_model import RidgeCV
             self._static_vars = list(self.static.columns)
-            resid = pd.DataFrame({
+            rf = pd.DataFrame({
                 "station": np.asarray(X["station"]),
                 "err": yv - f.vwc(x, self._cap_rel)[rows, cols],
-            }).groupby("station")["err"].mean()              # one sample/station
+                "w": np.ones(len(yv)) if w is None else w,
+            })
+            g = rf.groupby("station")
+            resid = g.apply(lambda d: np.average(d["err"], weights=d["w"]),
+                            include_groups=False)           # one sample/station
+            # Unweighted: every station keeps an equal ridge vote (as before).
+            # Weighted: a station's vote is its total sample weight.
+            stn_w = (None if w is None else
+                     (lambda s: (s / s.mean()).to_numpy(dtype=float))(
+                         g["w"].sum().loc[resid.index]))
             ref = self.static.loc[resid.index, self._static_vars]
             self._static_mean = ref.mean().to_numpy(dtype=float)
             self._static_std = np.where(ref.std().to_numpy(dtype=float) > 0,
                                         ref.std().to_numpy(dtype=float), 1.0)
             Z = (ref.to_numpy(dtype=float) - self._static_mean) / self._static_std
-            ridge = RidgeCV(alphas=np.logspace(-2, 3, 16)).fit(Z, resid.to_numpy())
+            ridge = RidgeCV(alphas=np.logspace(-2, 3, 16)).fit(
+                Z, resid.to_numpy(), sample_weight=stn_w)
             names += [f"c_{v}" for v in self._static_vars] + ["c_intercept"]
             values += list(ridge.coef_) + [float(ridge.intercept_)]
             self._ridge_alpha_ = float(ridge.alpha_)
