@@ -41,6 +41,13 @@ CLIM_VARS = ("smips_7d", "smips_30d", "smips_365d", "smips_anom")
 # groups (e.g. the scattered regional M-sites) fall back to per-station cubes.
 MAX_CLUSTER_DEG = 0.7
 
+# Concurrent per-day SMIPS WCS requests during a table build. The TERN GeoServer
+# scales cleanly to 32 (measured over a Yanco-sized cluster bbox: 0.225 s/day at
+# 8 workers, 0.128 at 16, 0.071 sustained at 32, with no failed requests at any
+# level); 64 gives nothing further. This is the build's dominant cost -- 10
+# clusters x 1826 days -- so it sets the wall clock: ~70 min at 8, ~22 min at 32.
+SMIPS_WORKERS = 32
+
 
 def add_temporal_features(df: pd.DataFrame, time_col: str = "time") -> pd.DataFrame:
     """Add cyclic day-of-year features (``doy_sin``, ``doy_cos``)."""
@@ -150,6 +157,35 @@ def add_soil_covariates(table: pd.DataFrame, coords: pd.DataFrame,
     return table.merge(pd.DataFrame(rows), on="station", how="left")
 
 
+# Widening fallbacks for the terrain window. A station whose default window
+# straddles a Copernicus DEM tile boundary can reproject to a zero-width raster
+# (Y9 does: "Attempt to create 0x97 dataset is illegal"); a slightly larger box
+# clears the boundary. Each buffer gets its own Query stub -- PaddockTS's
+# registry pins a stub to one bbox -- which is why the retry cannot simply
+# re-call with the same stub. Same fallback ladder as :mod:`emt.model7.build`.
+TERRAIN_RETRY_BUFFERS_KM = (2.0, 3.0)
+
+
+def station_terrain(station: str, lat: float, lon: float, start: date, end: date,
+                    buffer_km: float = 1.5, verbose: bool = True):
+    """Terrain covariates sampled at one station, retrying on a wider window.
+
+    Returns the sampled ``TERRAIN_VARS`` for the first buffer that yields a
+    usable DEM; re-raises the last error if every buffer fails.
+    """
+    err = None
+    for buf in (buffer_km, *TERRAIN_RETRY_BUFFERS_KM):
+        q = query_for_station(station, lat, lon, start, end, buffer_km=buf)
+        try:
+            return sample_points(terrain_covariates(q), lon, lat)
+        except Exception as e:                                    # noqa: BLE001
+            err = e
+            if verbose:
+                print(f"  terrain {station} (buffer {buf}): "
+                      f"{type(e).__name__}: {e}", flush=True)
+    raise err
+
+
 def station_features(station: str, site: str, lat: float, lon: float,
                      oznet_station: pd.DataFrame, start: date, end: date,
                      buffer_km: float = 1.5, smips_var: str = "totalbucket",
@@ -174,16 +210,15 @@ def station_features(station: str, site: str, lat: float, lon: float,
     if df.empty:
         return df
 
-    q = query_for_station(station, lat, lon, start, end, buffer_km=buffer_km)
-
     # Static terrain covariates at the station point (one sample, broadcast).
-    terr = sample_points(terrain_covariates(q), lon, lat)
+    terr = station_terrain(station, lat, lon, start, end, buffer_km=buffer_km)
     for v in TERRAIN_VARS:
         df[v] = float(terr[v].values)
 
     # SMIPS time series at the station pixel (cluster-supplied or per-station).
     if smips_series is None:
-        cube = download_smips(q, var=smips_var)
+        q = query_for_station(station, lat, lon, start, end, buffer_km=buffer_km)
+        cube = download_smips(q, var=smips_var, workers=SMIPS_WORKERS)
         smips_series = sample_points(cube, lon, lat).to_pandas()
     smips_series = smips_series.copy()
     smips_series.index = pd.to_datetime(smips_series.index).normalize()
@@ -214,7 +249,8 @@ def _partition_clusters(coords: pd.DataFrame) -> list[pd.DataFrame]:
 
 
 def _cluster_smips(group: pd.DataFrame, start: date, end: date,
-                   smips_var: str, buffer_km: float = 2.0) -> dict[str, pd.Series]:
+                   smips_var: str, buffer_km: float = 2.0,
+                   workers: int = SMIPS_WORKERS) -> dict[str, pd.Series]:
     """Download one SMIPS cube over a station cluster; sample each station.
 
     Returns ``{station: smips_series}``.
@@ -226,14 +262,15 @@ def _cluster_smips(group: pd.DataFrame, start: date, end: date,
     tag = "-".join(sorted(group["station"])[:3]) + f"_{len(group)}"
     q = Query(bbox=bbox, start=start, end=end,
               stub=f"smipscl_{tag}_{start:%Y%m%d}_{end:%Y%m%d}")
-    cube = download_smips(q, var=smips_var)
+    cube = download_smips(q, var=smips_var, workers=workers)
     return {r.station: sample_points(cube, float(r.lon), float(r.lat)).to_pandas()
             for r in group.itertuples(index=False)}
 
 
 def build_training_table(coords: pd.DataFrame, oznet_daily: pd.DataFrame,
                          start: date, end: date, buffer_km: float = 1.5,
-                         smips_var: str = "totalbucket", verbose: bool = True) -> pd.DataFrame:
+                         smips_var: str = "totalbucket", verbose: bool = True,
+                         workers: int = SMIPS_WORKERS) -> pd.DataFrame:
     """Assemble the full training table across all stations with coordinates.
 
     Args:
@@ -242,6 +279,7 @@ def build_training_table(coords: pd.DataFrame, oznet_daily: pd.DataFrame,
         oznet_daily: Combined daily root-zone table from
             :func:`emt.insitu.oznet.load_daily_rootzone`.
         start, end: Study period.
+        workers: Concurrent per-day SMIPS WCS requests (see ``SMIPS_WORKERS``).
 
     Returns:
         Long-format training table; one row per station-day with target,
@@ -254,7 +292,8 @@ def build_training_table(coords: pd.DataFrame, oznet_daily: pd.DataFrame,
     for gi, group in enumerate(clusters, 1):
         # One SMIPS cube per cluster (or per station for wide groups).
         try:
-            smips_by_station = _cluster_smips(group, start, end, smips_var)
+            smips_by_station = _cluster_smips(group, start, end, smips_var,
+                                              workers=workers)
         except Exception as e:
             if verbose:
                 print(f"  cluster {gi}/{len(clusters)} ({list(group.station)}): "

@@ -25,7 +25,8 @@ import pandas as pd
 
 from emt.insitu.oznet import fetch_manifest, load_daily_rootzone
 from emt.insitu.coordinates import COORDS_CACHE
-from emt.features import build_training_table, add_soil_covariates, SMIPS_COL
+from emt.features import (build_training_table, add_soil_covariates, SMIPS_COL,
+                          SMIPS_WORKERS)
 from emt.covariates import TERRAIN_VARS
 from emt.slga import SOIL_VARS
 
@@ -49,12 +50,14 @@ def site_of(station: str) -> str | None:
 
 def build(stations: list[str] | None = None, start: date = DEFAULT_START,
           end: date = DEFAULT_END, out: str | None = DEFAULT_OUT,
-          verbose: bool = True) -> pd.DataFrame:
+          verbose: bool = True, workers: int = SMIPS_WORKERS) -> pd.DataFrame:
     """Build (and optionally cache) the full training table.
 
     Args:
         stations: station ids to include; ``None`` = every core OzNet station
             with resolved coordinates (Y*/K*/A*/M1-M7).
+        workers: Concurrent per-day SMIPS WCS requests -- the build's dominant
+            cost (see :data:`emt.features.SMIPS_WORKERS`).
     Returns the long-format table (one row per station-day).
     """
     coords = pd.read_csv(COORDS_CACHE).dropna(subset=["lat", "lon"]).copy()
@@ -75,7 +78,8 @@ def build(stations: list[str] | None = None, start: date = DEFAULT_START,
         print(f"daily root-zone rows: {len(daily)} "
               f"({daily['station'].nunique()} stations)", flush=True)
 
-    tab = build_training_table(coords, daily, start, end, verbose=verbose)
+    tab = build_training_table(coords, daily, start, end, verbose=verbose,
+                               workers=workers)
     tab = add_soil_covariates(tab, coords, start, end)     # SLGA soil (static)
     tab = tab[[c for c in FINAL_COLS if c in tab.columns]]
 

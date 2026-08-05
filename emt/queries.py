@@ -26,17 +26,26 @@ def _period(start: date, end: date) -> str:
     return f"{start:%Y%m%d}_{end:%Y%m%d}"
 
 
+DEFAULT_BUFFER_KM = 1.5
+
+
 def query_for_station(station: str, lat: float, lon: float,
-                      start: date, end: date, buffer_km: float = 1.5) -> Query:
+                      start: date, end: date,
+                      buffer_km: float = DEFAULT_BUFFER_KM) -> Query:
     """A small square Query centred on one OzNet station (for point extraction).
 
     The stub embeds the date range because PaddockTS's registry requires a stub
     to map to a single (bbox, time) -- so the same station over different study
-    periods gets distinct, human-readable cache entries.
+    periods gets distinct, human-readable cache entries. For the same reason a
+    non-default ``buffer_km`` gets its own ``_b<km>`` stub: a widened retry (see
+    :func:`emt.features.station_terrain`) must not reuse the original stub,
+    which is already pinned to the narrower bbox.
     """
+    tag = (f"oznet_{station}_{_period(start, end)}"
+           if buffer_km == DEFAULT_BUFFER_KM else
+           f"oznet_{station}_b{buffer_km:g}_{_period(start, end)}")
     return Query.from_lat_lon(lat=lat, lon=lon, buffer_km=buffer_km,
-                              start=start, end=end,
-                              stub=f"oznet_{station}_{_period(start, end)}")
+                              start=start, end=end, stub=tag)
 
 
 def query_for_focus_area(name: str, start: date, end: date) -> Query:
