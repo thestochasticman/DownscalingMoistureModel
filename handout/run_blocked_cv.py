@@ -126,16 +126,23 @@ def summarise(name: str, out: pd.DataFrame) -> None:
               f"bias {r['bias']:+.2f}  n {int(r['n'])}")
 
 
+# NOTE: the full stack (m8capaw) has since been ADOPTED as model8's default --
+# m8.build_estimator() now IS that configuration (statics incl. aridity, AWC
+# capacity, stratified weights owned by the estimator). The configurations
+# below are therefore pinned explicitly so every documented row -- including
+# the pre-stack baselines -- stays reproducible.
+
+
+def m8_statics_base() -> pd.DataFrame:
+    """The pre-stack (published-reference) static set: soil + terrain only."""
+    return m8.load_statics(climate=False)
+
+
 def m8_statics_with_aridity() -> pd.DataFrame:
-    clim = pd.read_csv(DATA / "process_climate_statics.csv").set_index("station")
-    return m8.load_statics().join(clim[["aridity"]], how="inner")
+    return m8.load_statics(climate=True)
 
 
-def awc_capacity() -> pd.Series:
-    """SLGA AWC as per-station bucket capacity (model8's 'tested and not
-    defaulted' physical route -- it stacks with aridity+weights under blocked
-    validation even though its solo station-out gain was negligible)."""
-    return pd.read_csv(DATA / "process_soil_statics.csv").set_index("station")["soil_awc"]
+awc_capacity = m8.awc_capacity
 
 
 def model6_features() -> pd.DataFrame:
@@ -150,9 +157,11 @@ def model6_features() -> pd.DataFrame:
 RUNS = {
     # key: (table loader, features, estimator factory, weighted, output name)
     "m8":  (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
-            m8.FEATURES, m8.build_estimator, False, "model8_blockcv"),
+            m8.FEATURES, lambda: BucketEstimator(static=m8_statics_base()),
+            False, "model8_blockcv"),
     "m8w": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
-            m8.FEATURES, m8.build_estimator, True, "model8_blockcv_weighted"),
+            m8.FEATURES, lambda: BucketEstimator(static=m8_statics_base()),
+            True, "model8_blockcv_weighted"),
     "m8a": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
             m8.FEATURES, lambda: BucketEstimator(static=m8_statics_with_aridity()),
             False, "model8_blockcv_aridity"),
@@ -161,7 +170,7 @@ RUNS = {
              True, "model8_blockcv_aridity_weighted"),
     "m8cap": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
               m8.FEATURES,
-              lambda: BucketEstimator(static=m8.load_statics(), capacity=awc_capacity()),
+              lambda: BucketEstimator(static=m8_statics_base(), capacity=awc_capacity()),
               False, "model8_blockcv_capacity"),
     "m8capaw": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
                 m8.FEATURES,

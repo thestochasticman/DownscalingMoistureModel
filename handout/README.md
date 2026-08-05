@@ -48,7 +48,7 @@ then apply it. Each item links to a self-contained page.
 | 12 | [model5 · Soil smoothing](modules/model5.md) | A documented tradeoff, not recommended |
 | 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + weather (pooled NSE +0.38) |
 | 14 | [model7 · Process model](modules/model7.md) | The process track's foundation: bucket water balance, no ML (median station r 0.83) |
-| 15 | [model8 · Process model + SLGA soil](modules/model8.md) | **Recommended process model** — pooled NSE +0.40, median station NSE +0.22 |
+| 15 | [model8 · Process model + SLGA soil](modules/model8.md) | **Recommended process model** — station-out NSE +0.41, blocked +0.32 (full stack: soil + aridity + capacity + weights) |
 | 16 | [Blocked validation](modules/blocked_validation.md) | Leave-one-**block**-out transfer skill for model6 & model8 — the honest numbers for a national product |
 
 **3 · Applying the model**
@@ -103,8 +103,9 @@ look-ahead leak in the SMIPS-climatology features; see
 **And read every station-out figure as an interpolation estimate.** 26 of the
 37 stations sit in two tight clusters whose members share ~5 km forcing cells,
 so holding out one station leaves its near-neighbours in training. Holding out
-whole **spatially independent blocks** instead (9 folds) drops model8 to pooled
-**≈+0.29** (with its climate fix) and model6's block-median to +0.09, with the
+whole **spatially independent blocks** instead (9 folds) gives pooled
+**≈+0.32** for the shipped model8 (whose full-stack configuration was adopted
+from that experiment) and drops model6's block-median to +0.09, with the
 failures concentrated at the climate-envelope edges — the honest transfer
 numbers for a national product are on the
 [blocked-validation page](modules/blocked_validation.md).

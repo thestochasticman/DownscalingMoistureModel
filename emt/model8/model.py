@@ -1,37 +1,45 @@
-"""model8 -- model7 plus SLGA soil: the process model with a soil level anchor.
+"""model8 -- the process model, full stack: soil + terrain + climate statics,
+AWC bucket capacity, stratified training weights.
 
 Identical bucket water balance to :mod:`emt.model7` (same five calibrated
-parameters, same forcing store, same two-stage fit); the only change is the
-static set handed to the ridge offset stage: **SLGA root-zone soil**
-(clay / sand / AWC / bulk density) alongside model7's terrain
-(TWI / slope / elevation). One line of configuration -- and it nearly doubles
-the pooled leave-site-out skill, to parity with the ML models:
+parameters, same forcing store, same two-stage fit); the configuration adds
+three things on top, each validated under **blocked** (leave-one-block-out)
+cross-validation as well as the classic station-out harness (see the
+handout's blocked-validation page for the full experiment):
 
-    model7 (terrain only)   pooled NSE +0.18   median station NSE -0.03
-    model8 (+ SLGA soil)    pooled NSE +0.40   median station NSE +0.22
+* **Statics for the ridge offset stage**: SLGA root-zone soil (clay / sand /
+  AWC / bulk density) + terrain (TWI / slope / elevation) + the **aridity
+  normal** (mean P/PET from the SILO forcing) -- soil carries the between-site
+  level within a climate, aridity carries the level *across* climates.
+* **SLGA AWC as per-station bucket capacity** (``capacity=``): higher-AWC
+  soils genuinely hold and read out more water. Negligible alone (AWC spread
+  here is only 10.9 +/- 0.7 %), it stacks with the other two.
+* **Stratified sample weights** (:func:`stratified_weights`): aridity-tertile
+  x block cells weighted so ten clustered Yanco stations no longer outvote
+  three scattered dry M-sites; tempered ``w**0.5``. Owned by the estimator
+  (``weight_fn``), so the standard ``fit(X, y)`` harness applies them.
 
-This is the **recommended model of the process track**: pooled parity with the
-ML track's model6 (+0.40 vs +0.38 published), clearly better per-station
-medians, 13 interpretable parameters, and no training table. That both tracks
-independently land on soil as the between-site level information is strong
-evidence the signal is physical. Soil enters here exactly as terrain does -- a
-ridge-regularised per-station readout offset fitted on training-station mean
-residuals -- so a held-out station's level comes from its own SLGA values,
-never its observations.
+Skill (37 stations, 2006-2010), against the pre-stack configuration:
 
-Tested and not defaulted: SLGA AWC as *per-station bucket capacity*
-(``capacity=`` on the estimator, the physically-motivated route). Its LOSO
-gain is negligible (+0.16 vs +0.15 pooled) because AWC barely varies across
-these stations (10.9 +/- 0.7 %); the offsets carry the signal. The option
-remains available for regions with real AWC contrast.
+    station-out   pooled NSE +0.41 (was +0.40)   median station NSE +0.13 (was +0.22)
+    blocked       pooled NSE +0.32 (was +0.22)   median station NSE +0.07 (was -0.18)
 
-Requires ``data/process_soil_statics.csv`` (SLGA needs a TERN API key; built
-by :mod:`emt.model7.build`).
+The station-out column is the *interpolation* estimate (cluster neighbours in
+training), the blocked column the *transfer* estimate -- the honest figure
+for a national product. The one cost of the stack is the station-out median
+(the aridity term overshoots the best-behaved station of a held-out cluster's
+climate, A5); everything else improves in both harnesses. An earlier
+configuration without capacity/aridity/weights is retained in the handout's
+tables as the published reference.
+
+Requires ``data/process_soil_statics.csv`` (TERN API key) and
+``data/process_climate_statics.csv``; both built by :mod:`emt.model7.build`.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from emt.evaluation import TARGET, leave_site_out_cv as _cv, metrics  # noqa: F401
@@ -40,25 +48,87 @@ from emt.model7.model import BucketEstimator, FEATURES  # noqa: F401
 from emt.slga import SOIL_VARS
 
 TERRAIN_STATIC_VARS = ("twi", "slope", "elevation")
-STATIC_VARS = [*SOIL_VARS, *TERRAIN_STATIC_VARS]
+CLIMATE_STATIC_VARS = ("aridity",)
+STATIC_VARS = [*SOIL_VARS, *TERRAIN_STATIC_VARS, *CLIMATE_STATIC_VARS]
 
 SOIL_CSV = Path("data/process_soil_statics.csv")
 TERRAIN_CSV = Path("data/process_terrain_statics.csv")
+CLIMATE_CSV = Path("data/process_climate_statics.csv")
+
+# Stratified-weight configuration (see stratified_weights).
+N_STRATA = 3
+WEIGHT_TEMPER = 0.5
 
 
 def load_statics(soil_csv: Path = SOIL_CSV,
-                 terrain_csv: Path = TERRAIN_CSV) -> pd.DataFrame:
-    """Per-station soil + terrain statics (index = station)."""
+                 terrain_csv: Path = TERRAIN_CSV,
+                 climate_csv: Path = CLIMATE_CSV,
+                 climate: bool = True) -> pd.DataFrame:
+    """Per-station statics (index = station). ``climate=False`` gives the
+    pre-stack soil+terrain set (the handout's published reference config)."""
     soil = pd.read_csv(soil_csv).set_index("station")
     terr = pd.read_csv(terrain_csv).set_index("station")
-    return soil.join(terr, how="inner")[STATIC_VARS]
+    out = soil.join(terr, how="inner")
+    if climate:
+        clim = pd.read_csv(climate_csv).set_index("station")
+        out = out.join(clim[[*CLIMATE_STATIC_VARS]], how="inner")
+        return out[STATIC_VARS]
+    return out[[*SOIL_VARS, *TERRAIN_STATIC_VARS]]
+
+
+def awc_capacity(soil_csv: Path = SOIL_CSV) -> pd.Series:
+    """SLGA available water capacity per station -- the bucket-capacity input."""
+    return pd.read_csv(soil_csv).set_index("station")["soil_awc"]
+
+
+def block_of(station: str) -> str:
+    """Spatially independent location: cluster prefix, or the M-site itself."""
+    return {"Y": "YANCO", "K": "KYEAMBA", "A": "ADELONG"}.get(station[0], station)
+
+
+def stratified_weights(X: pd.DataFrame,
+                       climate_csv: Path = CLIMATE_CSV,
+                       temper: float = WEIGHT_TEMPER) -> np.ndarray:
+    """Hierarchical training weights: aridity stratum -> block -> sample.
+
+    Stations are cut into ``N_STRATA`` aridity (P/PET) tertiles; each stratum
+    receives equal total weight, split equally over the spatial *blocks*
+    inside it, then over each cell's samples -- so a dense cluster no longer
+    outvotes scattered single stations of the same climate. ``temper`` pulls
+    the weights toward flat (``w**temper``, renormalised) so a tiny cell
+    cannot dominate the loss.
+
+    The tertile *edges* are fixed once from the climate-statics file (all
+    stations), not recomputed per training subset: aridity is a covariate
+    known everywhere (no target information), and per-fold edges destabilise
+    the design -- removing a whole block shifts the cut points enough to cost
+    ~0.4 blocked station-median NSE. Cell membership and counts still come
+    from the training rows only.
+    """
+    aridity = pd.read_csv(climate_csv).set_index("station")["aridity"]
+    stations = pd.Series(np.asarray(X["station"]))
+    strat_by_station = pd.qcut(aridity, N_STRATA, labels=False)
+    stratum = stations.map(strat_by_station)
+    block = stations.map(block_of)
+    cell = pd.Series(list(zip(stratum, block)))
+    cell_n = cell.value_counts()
+    blocks_in = (pd.DataFrame({"s": stratum, "b": block}).drop_duplicates()
+                 .groupby("s").size())
+    n_strata = stratum.nunique()
+    w = np.array([1.0 / (n_strata * blocks_in[s] * cell_n[(s, b)])
+                  for s, b in cell])
+    w = (w / w.mean()) ** temper
+    return w / w.mean()
 
 
 def build_estimator(**kwargs) -> BucketEstimator:
-    """model7's bucket with the soil+terrain static set. ``capacity=`` (e.g.
-    the ``soil_awc`` column) switches on per-station bucket capacity; all
-    other kwargs pass through to :class:`~emt.model7.model.BucketEstimator`."""
+    """The full-stack bucket: soil+terrain+aridity statics, AWC capacity,
+    stratified weights. Any of the three is overridable (``static=``,
+    ``capacity=None``, ``weight_fn=None``); other kwargs pass through to
+    :class:`~emt.model7.model.BucketEstimator`."""
     kwargs.setdefault("static", load_statics())
+    kwargs.setdefault("capacity", awc_capacity())
+    kwargs.setdefault("weight_fn", stratified_weights)
     return BucketEstimator(**kwargs)
 
 

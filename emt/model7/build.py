@@ -10,6 +10,8 @@ Outputs (``data/``, gitignored like every other table)::
 
     process_target_2006_2010.csv     station-day root-zone VWC (the target)
     process_forcing_2005_2010.csv    per-station daily rain / PET / VPD
+    process_climate_statics.csv      per-station climate normals (rain, PET,
+                                     aridity P/PET) derived from the forcing
     process_terrain_statics.csv      per-station TERRAIN_VARS at the point
     process_soil_statics.csv         per-station SLGA SOIL_VARS (needs a TERN
                                      key; skipped with a notice if absent)
@@ -34,6 +36,7 @@ TARGET_CSV = "data/process_target_2006_2010.csv"
 FORCING_CSV = "data/process_forcing_2005_2010.csv"
 STATICS_CSV = "data/process_terrain_statics.csv"
 SOIL_CSV = "data/process_soil_statics.csv"
+CLIMATE_CSV = "data/process_climate_statics.csv"
 
 
 def build_target(start: date = DEFAULT_START, end: date = DEFAULT_END,
@@ -115,6 +118,26 @@ def build_terrain_statics(stations: list[str], start: date = DEFAULT_START,
     return statics
 
 
+def build_climate_statics(forcing: pd.DataFrame,
+                          out: str | None = CLIMATE_CSV) -> pd.DataFrame:
+    """Per-station climate normals from the forcing store (no extra fetch).
+
+    Mean annual rain and Morton PET (mm/yr) and their ratio (aridity, P/PET)
+    over the forcing period. The aridity normal is model8's climate static:
+    the level channel that transfers to unseen blocks (see the handout's
+    blocked-validation page).
+    """
+    g = forcing.groupby("station").agg(rain=("daily_rain", "mean"),
+                                       pet=("et_morton_potential", "mean"))
+    stats = pd.DataFrame({"rain_mean": g["rain"] * 365.25,
+                          "pet_mean": g["pet"] * 365.25})
+    stats["aridity"] = stats["rain_mean"] / stats["pet_mean"]
+    stats = stats.reset_index()
+    if out:
+        stats.to_csv(out, index=False)
+    return stats
+
+
 def build_soil_statics(stations: list[str], start: date = DEFAULT_START,
                        end: date = DEFAULT_END,
                        out: str | None = SOIL_CSV) -> pd.DataFrame:
@@ -147,6 +170,9 @@ def build(start: date = DEFAULT_START, end: date = DEFAULT_END) -> None:
     print("=== forcing (SILO) ===", flush=True)
     forcing = build_forcing(stations, start, end)
     print(f"  {len(forcing)} rows, {forcing['station'].nunique()} stations", flush=True)
+    print("=== climate statics (from the forcing) ===", flush=True)
+    clim = build_climate_statics(forcing)
+    print(f"  {len(clim)} stations", flush=True)
     print("=== terrain statics (Copernicus DEM) ===", flush=True)
     statics = build_terrain_statics(stations, start, end)
     print(f"  {len(statics)} stations", flush=True)

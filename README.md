@@ -107,8 +107,9 @@ emt/
   evaluation.py     leave-site-out cross-validation + metrics
   model1..model6/   estimator packages (each: FEATURES, build_estimator, fit)
   model7/           process model: calibrated bucket water balance (no ML)
-  model8/           model7 + SLGA soil offsets; model8/predict.py runs it for
-                    any date (point series or 30 m map), no SMIPS needed
+  model8/           the full-stack process model (soil+terrain+aridity offsets,
+                    AWC capacity, stratified weights); model8/predict.py runs it
+                    for any date (point series or 30 m map), no SMIPS needed
   persist.py        fit-once model + out-of-fold prediction caching
   downscale.py      model-agnostic per-pixel application → 30 m field
   predict.py        clone-and-run inference tool (Python function + CLI)
@@ -131,9 +132,10 @@ recommended `model6` (regularised histogram gradient boosting + SMIPS lookback +
 soil + antecedent meteorology); A parallel
 **process-model track** predicts by simulation instead: `model7` is a
 calibrated daily bucket water balance driven by SILO rain/PET (no machine
-learning, no SMIPS) and `model8` adds SLGA soil offsets — evaluated under the
-same leave-site-out harness, model8 matches model6's pooled skill (+0.40)
-with better per-station medians. `persist.py` caches fits and out-of-fold
+learning, no SMIPS) and `model8` layers on SLGA soil + terrain + aridity
+offsets, AWC bucket capacity and stratified training weights — station-out
+NSE +0.41 (parity with model6) and clearly better spatial *transfer*
+(blocked NSE +0.32 vs a pre-stack +0.22). `persist.py` caches fits and out-of-fold
 predictions so figures rebuild in seconds.
 
 **3 · Apply.** `downscale.py` applies a fitted model per 30 m pixel over an AOI
@@ -157,8 +159,8 @@ a per-station **level** bias (median per-station NSE −0.19) — it is a workin
 model, **not** a finished product. These are also *station-out* figures, i.e.
 interpolation next to instrumented sites; under **blocked validation** (whole
 spatially independent site-groups held out — the honest test for a national
-product) model8 transfers at pooled NSE ≈ +0.29 and model6's block-median falls
-to +0.09, with failures concentrated at the edges of the training climate range
+product) the shipped model8 transfers at pooled NSE ≈ +0.32 and model6's
+block-median falls to +0.09, with failures concentrated at the edges of the training climate range
 (see
 [blocked validation](handout/modules/blocked_validation.md)). The full story,
 including an earlier evaluation leak that was found and corrected, is in the

@@ -179,10 +179,16 @@ class BucketEstimator:
     def __init__(self, forcing: Forcing | None = None,
                  static: pd.DataFrame | None = None,
                  capacity: pd.Series | None = None,
+                 weight_fn=None,
                  n_starts: int = 3, maxfev: int = 800, seed: int = 0):
         self.forcing = forcing
         self.static = static
         self.capacity = capacity
+        # Optional callable(X) -> per-row sample weights, applied whenever fit
+        # is called without explicit sample_weight -- lets a configuration own
+        # its weighting (e.g. model8's stratified weights) while running
+        # unchanged through the shared est.fit(X, y) harness.
+        self.weight_fn = weight_fn
         self.n_starts = n_starts
         self.maxfev = maxfev
         self.seed = seed
@@ -202,14 +208,20 @@ class BucketEstimator:
         f = self._forcing()
         rows, cols = f.index(X)
         yv = np.asarray(y, dtype=float)
+        if sample_weight is None and self.weight_fn is not None:
+            sample_weight = self.weight_fn(X)
         w = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
 
         # Per-station capacity (e.g. SLGA AWC): normalised to mean 1 over the
         # *training* stations, applied to every station from its own value.
+        # The training mean is kept for inference at new locations (their
+        # capacity ratio is their own value over this same normaliser).
         self._cap_rel = None
+        self.cap_train_mean_ = None
         if self.capacity is not None:
             cap = self.capacity.reindex(f.stations).to_numpy(dtype=float)
             train_mean = self.capacity.loc[X["station"].unique()].mean()
+            self.cap_train_mean_ = float(train_mean)
             self._cap_rel = cap / float(train_mean)
 
         # Stage 1: calibrate the 5 bucket parameters (statics play no part).

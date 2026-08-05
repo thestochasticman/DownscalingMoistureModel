@@ -115,7 +115,7 @@ reweighting or covariate fixes an empty region of predictor space — only
 observations there do.**
 
 **3b · The physical capacity route, dropped under station-out, earns its
-place under blocking.** [model8's page](model8.md#what-was-tested-and-not-defaulted)
+place under blocking.** [model8's page](model8.md#what-was-tested-along-the-way)
 tested SLGA AWC as *per-station bucket capacity* (`capacity=` — higher-AWC
 soils genuinely hold and read out more water) and did not default it: its
 solo station-out gain was negligible because AWC barely varies here
@@ -201,9 +201,11 @@ Adelong lands at **+0.11 with bias −0.44** — against **−1.03 / −7.1 bloc
   outside it. The station-out +0.40 remains the right figure for the
   interpolation use-case (predicting near an instrumented site).
 * The aridity static + stratified weights + AWC capacity are cheap,
-  principled improvements for model8 — candidates for its default
-  configuration (the full stack costs 0.09 station-median at station-out;
-  everything else improves in both harnesses).
+  principled improvements for model8, and the full stack **is now the shipped
+  model8** (`emt.model8.build_estimator` + `data/models/model8.joblib`; the
+  stack costs 0.09 station-median at station-out, everything else improves in
+  both harnesses). The pre-stack configuration remains reproducible via this
+  page's scripts as the published reference.
 * The remaining edge failure is a **data** limitation. The productive next
   investments are a pedotransfer readout (θ from SLGA bulk density / AWC
   rather than two fitted globals) and, above all, the national in-situ

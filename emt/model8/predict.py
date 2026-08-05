@@ -26,9 +26,9 @@ fetched ahead of the target. Measured convergence at one Murrumbidgee point
     VWC       17.724%   17.473   17.473   17.473   17.473   17.473
 
 Everything from six months out is identical to a ten-year spin-up; only the
-three-month run is off (+0.25 % VWC). That matches the fitted recession
-``k = 0.0073/day`` (a 137-day e-folding), so the default carries a ~4x margin
-over what convergence needs. The cost is fetch time on a first run -- in map
+three-month run is off (+0.25 % VWC). (Measured with the pre-full-stack
+fit, ``k = 0.0073``; the shipped full-stack fit has ``k = 0.0065/day``, a
+154-day e-folding, so the default's margin is ~4x either way.) The cost is fetch time on a first run -- in map
 mode every forcing cell pulls that many years -- so lowering it to 1 is safe if
 you want faster cold starts.
 
@@ -62,7 +62,7 @@ from PaddockTS.Environmental.SILO.download_silo import download_silo
 
 from emt.covariates import terrain_covariates, sample_points
 from emt.model7.model import _step_loop
-from emt.model8.model import STATIC_VARS, TERRAIN_STATIC_VARS
+from emt.model8.model import TERRAIN_STATIC_VARS
 from emt.persist import load_model
 from emt.slga import soil_covariates, SOIL_VARS
 
@@ -111,20 +111,63 @@ def _silo_series(q: Query) -> pd.DataFrame:
     return s.set_index("time")[[_RAIN, _PET]].sort_index()
 
 
-def _simulate(rain: np.ndarray, pet: np.ndarray, model) -> np.ndarray:
-    """Bucket storage (days, n) from forcing (days, n) using the fitted params."""
+def _cap_ratio(model, awc) -> np.ndarray | None:
+    """Per-location capacity ratio (smax multiplier) from SLGA AWC.
+
+    The fitted model normalises capacity by its training-station mean AWC
+    (``cap_train_mean_``); a new location's ratio is its own AWC over that
+    same constant. ``None`` (capacity off, e.g. an older fit) or non-finite
+    AWC (e.g. water pixels) falls back to the global ``smax``.
+    """
+    train_mean = getattr(model, "cap_train_mean_", None)
+    if train_mean is None:
+        return None
+    awc = np.asarray(awc, dtype=float)
+    return np.where(np.isfinite(awc), awc / train_mean, 1.0)
+
+
+def _simulate(rain: np.ndarray, pet: np.ndarray, model,
+              cap_ratio: np.ndarray | None = None) -> np.ndarray:
+    """Bucket storage (days, n) from forcing (days, n) using the fitted params.
+
+    ``cap_ratio`` (per column) scales the capacity: ``smax_i = smax * ratio_i``
+    -- the inference counterpart of the estimator's ``capacity=`` input. The
+    readout keeps the global ``smax`` denominator (see ``Forcing.vwc``).
+    """
     smax, alpha, k = model.bucket_params
     rain = np.ascontiguousarray(rain, dtype=float)
     pet = np.ascontiguousarray(pet, dtype=float)
-    return _step_loop(rain, pet, np.full(rain.shape[1], smax), alpha, k)
+    smax_i = (np.full(rain.shape[1], smax) if cap_ratio is None
+              else smax * np.asarray(cap_ratio, dtype=float))
+    return _step_loop(rain, pet, smax_i, alpha, k)
 
 
-def _statics_at_point(q: Query, lon: float, lat: float) -> np.ndarray:
-    """SLGA soil + terrain at one point, in ``STATIC_VARS`` order."""
+def _aridity(silo: pd.DataFrame) -> float:
+    """Aridity normal (mean P / mean PET) over a fetched SILO series.
+
+    Training used the 2005-2010 forcing; at inference the normal is estimated
+    over the fetched window (spin-up start -> end, >= 2 calendar years). P/PET
+    is a stable ratio, so the window difference moves the static by well under
+    one training standard deviation.
+    """
+    return float(silo[_RAIN].mean() / silo[_PET].mean())
+
+
+def _statics_at_point(q: Query, lon: float, lat: float, model,
+                      silo: pd.DataFrame) -> tuple[np.ndarray, float]:
+    """Statics at one point in the *fitted* model's variable order, + AWC.
+
+    Sources per variable: SLGA rasters (soil), the 30 m DEM stack (terrain),
+    and the SILO series (``aridity``). Driven by ``model._static_vars`` so an
+    older fit (no aridity) keeps working unchanged.
+    """
     soil, terr = soil_covariates(q), terrain_covariates(q)
     src = {**{v: soil[v] for v in SOIL_VARS},
            **{v: terr[v] for v in TERRAIN_STATIC_VARS}}
-    return np.array([[float(sample_points(src[v], lon, lat).values) for v in STATIC_VARS]])
+    vals = {v: float(sample_points(src[v], lon, lat).values) for v in src}
+    vals["aridity"] = _aridity(silo)
+    return (np.array([[vals[v] for v in model._static_vars]]),
+            vals["soil_awc"])
 
 
 # --------------------------------------------------------------------------- #
@@ -155,9 +198,10 @@ def predict_point(lat: float, lon: float, start, end=None, model=None,
     silo = _silo_series(q)
     if verbose:
         print("  SLGA soil + terrain ...", flush=True)
-    statics = _statics_at_point(q, lon, lat)
+    statics, awc = _statics_at_point(q, lon, lat, model, silo)
 
-    storage = _simulate(silo[[_RAIN]].to_numpy(), silo[[_PET]].to_numpy(), model)
+    storage = _simulate(silo[[_RAIN]].to_numpy(), silo[[_PET]].to_numpy(), model,
+                        cap_ratio=_cap_ratio(model, [awc]))
     vwc = model.readout(storage[:, 0], np.repeat(statics, len(silo), axis=0))
 
     out = pd.DataFrame({"time": silo.index, "sm_pred": vwc,
@@ -202,7 +246,8 @@ def _forcing_grid(bbox, sim_start: _date, day: _date, step_deg: float,
             cols.append(s.reindex(times))
     rain = np.column_stack([c[_RAIN].to_numpy() for c in cols])
     pet = np.column_stack([c[_PET].to_numpy() for c in cols])
-    return rain, pet, lons, lats
+    aridity = np.array([_aridity(c) for c in cols])
+    return rain, pet, aridity, lons, lats
 
 
 def predict_map(bbox, day, model=None, model_name: str = "model8",
@@ -232,20 +277,36 @@ def predict_map(bbox, day, model=None, model_name: str = "model8",
         print("  SLGA soil ...", flush=True)
     soil = soil_covariates(q)
 
-    rain, pet, lons, lats = _forcing_grid(bbox, sim_start, day, step_deg, verbose)
-    storage = _simulate(rain, pet, model)[-1].reshape(len(lats), len(lons))
+    rain, pet, aridity, lons, lats = _forcing_grid(bbox, sim_start, day, step_deg,
+                                                   verbose)
+
+    # Capacity per forcing cell: SLGA AWC sampled at the cell centre (the
+    # water balance runs at forcing scale, matching the station-scale fit).
+    awc_cells = np.array([float(sample_points(soil["soil_awc"], float(lo),
+                                              float(la)).values)
+                          for la in lats for lo in lons])
+    storage = _simulate(rain, pet, model,
+                        cap_ratio=_cap_ratio(model, awc_cells))[-1]
+    storage = storage.reshape(len(lats), len(lons))
     coarse = (xr.DataArray(storage, coords={"y": lats, "x": lons}, dims=("y", "x"))
               .rio.write_crs(4326))
     fine = coarse.rio.reproject_match(grid, resampling=Resampling.bilinear)
 
-    src = {**{v: soil[v] for v in SOIL_VARS},
-           **{v: terr[v] for v in TERRAIN_STATIC_VARS}}
+    # Static layers per pixel, in the fitted model's variable order: soil and
+    # terrain from their rasters (nearest, per-pixel identity); the aridity
+    # normal from the forcing grid (bilinear -- a smooth climate field).
+    src = {**{v: (soil[v], Resampling.nearest) for v in SOIL_VARS},
+           **{v: (terr[v], Resampling.nearest) for v in TERRAIN_STATIC_VARS},
+           "aridity": (xr.DataArray(aridity.reshape(len(lats), len(lons)),
+                                    coords={"y": lats, "x": lons},
+                                    dims=("y", "x")).rio.write_crs(4326),
+                       Resampling.bilinear)}
     stat_cols = []
-    for v in STATIC_VARS:
-        a = src[v]
+    for v in model._static_vars:
+        a, resamp = src[v]
         if a.rio.crs is None:
             a = a.rio.write_crs(4326)
-        stat_cols.append(a.rio.reproject_match(grid, resampling=Resampling.nearest)
+        stat_cols.append(a.rio.reproject_match(grid, resampling=resamp)
                          .values.ravel())
     S = np.column_stack(stat_cols)
     stor = fine.values.ravel()
