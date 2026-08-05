@@ -51,38 +51,57 @@ from emt.model8.model import (STATIC_VARS, TERRAIN_STATIC_VARS,  # noqa: F401
                               load_statics, stratified_weights)
 
 PEDO_CSV = Path("data/process_pedotransfer_statics.csv")
+HYDRAULIC_CSV = Path("data/process_slga_hydraulic_statics.csv")
 
 # Which pedotransfer limits define the bucket's empty and full states. The
 # "available" pairing (WP -> FC) is the physical default; "saturation" spans
 # WP -> SAT for soils that routinely wet past field capacity.
 READOUT_SPAN = "available"
 
+# Where the limits come from. "saxton" estimates them from texture via
+# Saxton & Rawls (:mod:`emt.pedotransfer`), which carries a nominal
+# organic-matter assumption. "slga" uses SLGA's own published drained upper
+# limit and 15-bar limit instead -- no regression, no OM assumption.
+READOUT_SOURCE = "saxton"
+
 
 def load_readout_limits(pedo_csv: Path = PEDO_CSV,
-                        span: str = READOUT_SPAN) -> pd.DataFrame:
+                        span: str = READOUT_SPAN,
+                        source: str = READOUT_SOURCE,
+                        hydraulic_csv: Path = HYDRAULIC_CSV) -> pd.DataFrame:
     """Per-station ``theta_r`` / ``dtheta`` (index = station), in volumetric %.
 
-    ``theta_r`` is always the wilting point. ``dtheta`` is the plant-available
-    range (``span="available"``) or the full range to saturation
-    (``span="saturation"``).
+    ``theta_r`` is always the wilting point and ``dtheta`` the range above it.
+    With ``source="saxton"`` these are Saxton-Rawls estimates from texture and
+    ``span`` selects the plant-available range (WP->FC) or the full range to
+    saturation. With ``source="slga"`` they are SLGA's published DUL and L15,
+    for which only the available span exists.
     """
+    if source == "slga":
+        h = pd.read_csv(hydraulic_csv).set_index("station")
+        return pd.DataFrame({"theta_r": h["soil_l15"],
+                             "dtheta": h["soil_dul"] - h["soil_l15"]})
     p = pd.read_csv(pedo_csv).set_index("station")
     top = p["field_capacity"] if span == "available" else p["saturation"]
     return pd.DataFrame({"theta_r": p["wilting_point"],
                          "dtheta": top - p["wilting_point"]})
 
 
-def build_estimator(span: str = READOUT_SPAN, **kwargs) -> BucketEstimator:
+def build_estimator(span: str = READOUT_SPAN, source: str = READOUT_SOURCE,
+                    **kwargs) -> BucketEstimator:
     """model8's full stack with the readout constants replaced by per-site
-    pedotransfer limits. ``span`` selects WP->FC (default) or WP->saturation;
-    all other kwargs pass through to :class:`~emt.model7.model.BucketEstimator`."""
+    hydraulic limits. ``source`` selects Saxton-Rawls-from-texture (default) or
+    SLGA's own DUL/L15; ``span`` selects WP->FC (default) or WP->saturation for
+    the Saxton-Rawls source. All other kwargs pass through to
+    :class:`~emt.model7.model.BucketEstimator`."""
     kwargs.setdefault("static", load_statics())
     kwargs.setdefault("capacity", awc_capacity())
     kwargs.setdefault("weight_fn", stratified_weights)
-    kwargs.setdefault("readout_limits", load_readout_limits(span=span))
+    kwargs.setdefault("readout_limits", load_readout_limits(span=span, source=source))
     est = BucketEstimator(**kwargs)
-    # Recorded so inference can rebuild the same limits per pixel from texture.
+    # Recorded so inference can rebuild the same limits per pixel.
     est.readout_span_ = span
+    est.readout_source_ = source
     return est
 
 

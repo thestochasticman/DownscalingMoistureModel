@@ -114,6 +114,65 @@ physically instead of as a linear level correction. That is the structural
 result even where the skill result is mixed: in model8 the offset stage was
 doing a job the readout should have been doing.
 
+## Where the limits come from: texture estimate vs SLGA's own
+
+model9 above *estimates* the hydraulic limits from texture. SLGA publishes
+them directly — `DUL` (drained upper limit ≈ field capacity) and `L15` (water
+content at 15 bar ≈ wilting point) — so the estimate can be replaced with the
+measured-basis product, removing both the Saxton–Rawls regression and its
+organic-matter assumption. `emt.model9.build_estimator(source="slga")` does
+this; the limits are built by `emt.model7.build.build_hydraulic_statics`.
+
+*(This was reached sideways. The planned refinement was real SLGA **organic
+carbon**, to replace the nominal 1.5 % OM. SOC is **not available** — the
+current TERN COG tree returns no SOC layers in either release. DUL/L15 turned
+out to be the better substitute, and they exist only in SLGA Release 1, hence
+the v1 resolver in [`emt/slga.py`](slga.py.md).)*
+
+The two sources agree closely on **absolute levels** and not at all on the
+**range** between them:
+
+| | SLGA | Saxton–Rawls | correlation between them |
+|---|---|---|---|
+| wilting point | 15.8 % | 20.4 % | +0.87 |
+| field capacity | 26.9 % | 31.0 % | +0.84 |
+| **range** (FC − WP) | 11.0 % | 10.6 % | **+0.08** |
+
+And it is the *range* that model9's `dtheta` uses. Against observed site
+behaviour, SLGA's published range carries almost no signal (+0.20 / +0.08 /
+−0.09 against site p5 / p95 / swing) where the Saxton–Rawls range carries
+real signal (+0.55 / +0.66 / +0.43) — the same pathology as
+[SLGA's own AWC](#why-texture-and-not-slgas-own-awc), now confirmed twice from
+independent products.
+
+**So the prediction was that SLGA limits would score worse. Half right:**
+
+| model9 readout source | BLOCK | STATION | BLOCK × YEAR | blocked block-median | blocked station-median |
+|---|---|---|---|---|---|
+| Saxton–Rawls (default) | **+0.347** | **+0.397** | +0.323 | +0.271 | **+0.04** |
+| SLGA DUL/L15 | +0.339 | +0.354 | **+0.338** | **+0.355** | −0.07 |
+
+The texture estimate wins the *station*-level views — station-out pooled
+(+0.397 vs +0.354) and blocked station-median (+0.04 vs −0.07), exactly as the
+correlations predicted. But SLGA's limits win the *block*-level views, and by
+more: **block-median +0.355 against +0.271, and block × year +0.338 — the best
+figure any configuration has posted on the strictest harness.** Adelong, the
+block that motivated the whole readout change, improves from +0.059 to
+**+0.260**.
+
+**Neither source dominates, and the default is unchanged** (Saxton–Rawls)
+because that is what the shipped `model9.joblib` was fitted with and the
+margin runs both ways. Anyone optimising for district-scale transfer should
+switch to `source="slga"`; anyone optimising for per-station accuracy should
+not.
+
+**K12 stays broken either way** — −16.16 with SLGA against −15.95 with
+Saxton–Rawls, its predictions still topping out near 30 % against observations
+of 33–52 %. That was the stated prediction: SLGA's own drained upper limit at
+K12 is 26.1 % against an observed *mean* of 39.0 %, so no hydraulic limit from
+any source — estimated or published — reaches that site. It is water-table
+driven, and no soil product will fix it.
+
 ## What was tested and rejected
 
 * **Span to saturation** (`span="saturation"`: bucket full = total porosity
