@@ -337,12 +337,16 @@ def predict_map(bbox, day, model=None, model_name: str = "model8",
     S = np.column_stack(stat_cols)
     stor = fine.values.ravel()
 
-    # Pedotransfer limits per pixel (model9); None for the 5-param fits.
-    clay = (soil["soil_clay"].rio.reproject_match(grid, resampling=Resampling.nearest)
-            .values.ravel())
-    sand = (soil["soil_sand"].rio.reproject_match(grid, resampling=Resampling.nearest)
-            .values.ravel())
-    lim = _pedo_limits(model, clay, sand)
+    # Pedotransfer limits per pixel (model9); None for the 5-param fits. The
+    # SLGA layers carry no CRS of their own, so write it before reprojecting
+    # (same guard as the statics loop above).
+    def _on_grid(name):
+        a = soil[name]
+        if a.rio.crs is None:
+            a = a.rio.write_crs(4326)
+        return a.rio.reproject_match(grid, resampling=Resampling.nearest).values.ravel()
+
+    lim = _pedo_limits(model, _on_grid("soil_clay"), _on_grid("soil_sand"))
 
     valid = np.isfinite(S).all(axis=1) & np.isfinite(stor)
     pred = np.full(stor.shape, np.nan, dtype="float32")
@@ -361,15 +365,16 @@ def predict_map(bbox, day, model=None, model_name: str = "model8",
     if save:
         outdir = Path(q.out_dir)
         outdir.mkdir(parents=True, exist_ok=True)
-        tif = outdir / f"soil_moisture_model8_{day}.tif"
+        tag = getattr(model, "name_", None) or model_name
+        tif = outdir / f"soil_moisture_{tag}_{day}.tif"
         ds["sm_pred"].rio.to_raster(tif)
         ds.attrs["output_tif"] = str(tif)
         if verbose:
             print(f"  saved {tif}", flush=True)
         if plot:
             from emt.predict import plot_field
-            png = outdir / f"soil_moisture_model8_{day}.png"
-            plot_field(ds, png, title=f"Root-zone soil moisture, {day} (30 m, model8)")
+            png = outdir / f"soil_moisture_{tag}_{day}.png"
+            plot_field(ds, png, title=f"Root-zone soil moisture, {day} (30 m, {tag})")
             ds.attrs["output_png"] = str(png)
             if verbose:
                 print(f"  saved {png}", flush=True)
