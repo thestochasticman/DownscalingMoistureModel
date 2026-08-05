@@ -3,8 +3,9 @@
 (a) Skill of each held-out year against that year's rainfall. Four of the five
 years score alike; 2010 — the drought-breaking wet year, at nearly four times
 2006's rainfall — is the one that breaks, and it breaks by running too dry.
-(b) The same models under three fold designs (year / station / block), showing
-that transfer across *time* is easier than transfer across *space*.
+(b) The same models under four fold designs of increasing strictness (year /
+station / block / block x year), showing that transfer across *time* is easier
+than transfer across *space*, and that the strict double hold-out is the floor.
 
 Reads data/model{6,8,9}_yearcv*_predictions.csv plus the blockcv/losocv tables
 written by run_blocked_cv.py, and the forcing store for annual rainfall.
@@ -33,12 +34,15 @@ YEAR = {"model6": "model6_yearcv_predictions.csv",
         "model9": "model9_yearcv_predictions.csv"}
 LADDER = {
     "model6": {"year": YEAR["model6"], "station": None,
-               "block": "model6_blockcv_predictions.csv"},
+               "block": "model6_blockcv_predictions.csv",
+               "blockyear": "model6_blockyearcv_predictions.csv"},
     "model8": {"year": YEAR["model8"],
                "station": "model8_losocv_capacity_aridity_weighted_predictions.csv",
-               "block": "model8_blockcv_capacity_aridity_weighted_predictions.csv"},
+               "block": "model8_blockcv_capacity_aridity_weighted_predictions.csv",
+               "blockyear": "model8_blockyearcv_capacity_aridity_weighted_predictions.csv"},
     "model9": {"year": YEAR["model9"], "station": "model9_losocv_predictions.csv",
-               "block": "model9_blockcv_predictions.csv"},
+               "block": "model9_blockcv_predictions.csv",
+               "blockyear": "model9_blockyearcv_predictions.csv"},
 }
 
 
@@ -77,10 +81,11 @@ ax[0].legend(fontsize=9, loc="lower left")
 ax[0].grid(alpha=.3)
 
 # (b) the harness ladder
-designs = ["year", "station", "block"]
-labels = {"year": "leave-one-YEAR-out\n(new weather, known sites)",
-          "station": "leave-one-STATION-out\n(new pixel, neighbours known)",
-          "block": "leave-one-BLOCK-out\n(new district)"}
+designs = ["year", "station", "block", "blockyear"]
+labels = {"year": "YEAR\n(new weather,\nknown sites)",
+          "station": "STATION\n(new pixel,\nneighbours known)",
+          "block": "BLOCK\n(new district)",
+          "blockyear": "BLOCK × YEAR\n(new district,\nnew regime)"}
 w, xs = 0.26, np.arange(len(designs))
 for i, (m, srcs) in enumerate(LADDER.items()):
     vals, pos = [], []
@@ -99,9 +104,9 @@ for i, (m, srcs) in enumerate(LADDER.items()):
         ax[1].annotate(f"{v:+.2f}", (p, v), textcoords="offset points",
                        xytext=(0, 3), ha="center", fontsize=8)
 ax[1].set_xticks(xs)
-ax[1].set_xticklabels([labels[d] for d in designs], fontsize=8.5)
+ax[1].set_xticklabels([labels[d] for d in designs], fontsize=7.8)
 ax[1].set(ylabel="pooled NSE", ylim=[0, 0.88],
-          title="(b) Time is the easy axis; space is the hard one")
+          title="(b) Each rung removes more of what the model could lean on")
 ax[1].legend(fontsize=9, loc="upper right")
 ax[1].grid(alpha=.3, axis="y", zorder=0)
 

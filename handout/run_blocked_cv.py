@@ -86,6 +86,7 @@ def prep(tab: pd.DataFrame, features) -> pd.DataFrame:
     sub["block"] = sub["station"].map(block_of)
     sub["stratum"] = sub["station"].map(strata_from_forcing())
     sub["year"] = pd.to_datetime(sub["time"]).dt.year
+    sub["blockyear"] = sub["block"].astype(str) + "|" + sub["year"].astype(str)
     return sub
 
 
@@ -95,13 +96,22 @@ def blocked_cv(sub: pd.DataFrame, features, factory, weighted: bool,
 
     ``"block"`` is the spatial design; ``"station"`` reproduces the classic
     leave-one-station-out folds with the same estimator; ``"year"`` holds out a
-    whole calendar year, testing transfer across hydrological regimes.
+    whole calendar year, testing transfer across hydrological regimes;
+    ``"blockyear"`` holds out both at once -- a new district in a year whose
+    weather was never calibrated on, the honest worst case.
     """
     out = sub[["station", "block", "stratum", "year", "time", TARGET]].copy()
     out["pred"] = np.nan
     for grp in sorted(sub[holdout_col].unique()):
         te = (sub[holdout_col] == grp).values
-        tr = sub.loc[~te]
+        if holdout_col == "blockyear":
+            # Strict double hold-out: the test cell is one (block, year), and
+            # training excludes that block ENTIRELY and that year ENTIRELY --
+            # so the model has seen neither the place nor the regime.
+            blk, yr = grp.split("|")
+            tr = sub.loc[(sub["block"] != blk) & (sub["year"] != int(yr))]
+        else:
+            tr = sub.loc[~te]
         est = factory()
         if weighted:
             est.fit(tr[features], tr[TARGET], sample_weight=make_weights(tr))
@@ -208,7 +218,8 @@ if __name__ == "__main__":
         key, _, grp = arg.partition("@")
         holdout = grp or "block"
         loader, features, factory, weighted, name = RUNS[key]
-        tag = {"block": "blockcv", "station": "losocv", "year": "yearcv"}[holdout]
+        tag = {"block": "blockcv", "station": "losocv", "year": "yearcv",
+               "blockyear": "blockyearcv"}[holdout]
         name = name.replace("blockcv", tag)
         sub = prep(loader(), features)
         out = blocked_cv(sub, features, factory, weighted, arg, holdout_col=holdout)
