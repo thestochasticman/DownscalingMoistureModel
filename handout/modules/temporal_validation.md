@@ -33,13 +33,26 @@ together**, which turns out to be where the honest number lives.
 
 | pooled NSE | YEAR | STATION | BLOCK | BLOCK × YEAR |
 |---|---|---|---|---|
-| model6 | **+0.771** | — ¹ | +0.355 | ² |
+| model6 | **+0.771** | — ¹ | +0.355 | +0.340 |
 | model8 (shipped) | +0.475 | +0.408 | +0.322 | +0.273 |
-| model9 | +0.447 | +0.397 | +0.347 | **+0.323** |
+| model9 | +0.447 | +0.397 | +0.347 | +0.323 |
 
 ¹ not run — model6's station-out reference is the published 36-station figure
-(+0.377), not a same-rows rerun on this table. ² model6's 44-cell block × year
-run is expensive (a boosting fit per cell); see the note at the end.
+(+0.377), not a same-rows rerun on this table.
+
+Pooled NSE is the flattering view, though. Under the strictest design the
+per-*block* and per-*station* medians separate the tracks far more sharply than
+the pooled column does:
+
+| block × year | pooled | block-median | blocks NSE>0 | station-median |
+|---|---|---|---|---|
+| model6 | **+0.340** | +0.121 | 5/9 | −0.28 |
+| model8 (shipped) | +0.273 | +0.332 | **7/9** | **−0.01** |
+| model9 | +0.323 | **+0.361** | **7/9** | **−0.01** |
+
+model6 wins pooled and loses everything else — the same split as under blocked
+folds, and for the same reason: pooled is dominated by the two large clusters,
+while the medians give each location one vote.
 
 Skill of each held-out year:
 
@@ -135,10 +148,17 @@ extremes are equally hard.
 | 2010 | 951 | +0.269 | +0.143 |
 
 **model9's advantage widens under strictness.** It beats model8 in *every* year
-of the strict design (+0.323 vs +0.273 pooled), where under blocked folds alone
-the margin was slimmer. The more you withhold, the more the physical readout
-earns its place — which is an argument for it that the headline blocked numbers
-understate.
+of the strict design (+0.323 vs +0.273 pooled, block-median +0.361 vs +0.332),
+where under blocked folds alone the margin was slimmer. The more you withhold,
+the more the physical readout earns its place — an argument for it that the
+headline blocked numbers understate.
+
+**The ML track is least damaged by the temporal axis, most by the spatial
+one.** Going from block to block × year costs model6 only 0.015 pooled NSE
+(+0.355 → +0.340) against model8's 0.049. Its lookback features already encode
+recent weather, so an unseen year is little extra burden; what it cannot do is
+place an unseen *site*, and its strict block-median of +0.121 (5 of 9 blocks
+positive) against the process models' +0.33/+0.36 (7 of 9) says so.
 
 **M7 is a site problem, not a regime problem.** All five worst cells are M7, in
 all five years, with correlations of 0.66–0.97 — including **r = 0.97 at
@@ -163,15 +183,6 @@ fold, which on a five-year record leaves almost nothing to test.
 The **block × year** design above closes most of that gap — it is the strictest
 test available on this dataset, and it is the number to quote for a national
 product applied to an arbitrary year.
-
-## A note on model6's strict run
-
-model6's block × year design needs a gradient-boosting fit per cell — 44 of
-them, against the two process models' seconds-per-fit. It was launched but is
-not reported here; the model6 column of the strict table is left empty rather
-than filled with a figure that was not measured. The two process models are
-enough to establish the ladder's shape, and model6's position on the first
-three rungs is already known.
 
 ## Reproduce
 
