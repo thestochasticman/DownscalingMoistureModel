@@ -20,6 +20,8 @@ from os import makedirs
 from os.path import exists
 
 import numpy as np
+from functools import lru_cache
+
 import rioxarray  # noqa: F401  (registers the .rio accessor)
 import xarray as xr
 
@@ -30,7 +32,18 @@ from PaddockTS.Environmental.SLGASoils.utils import (
 # Model feature name -> PaddockTS SLGA attribute name (see SLGASoils.attribute_codes).
 SOIL_VARS = ("soil_clay", "soil_sand", "soil_awc", "soil_bdw")
 SLGA_ATTR = {"soil_clay": "Clay", "soil_sand": "Sand",
-             "soil_awc": "Available_Water_Capacity", "soil_bdw": "Bulk_Density"}
+             "soil_awc": "Available_Water_Capacity", "soil_bdw": "Bulk_Density",
+             "soil_dul": "Drained_Upper_Limit", "soil_l15": "L15"}
+
+# SLGA's own measured-basis soil hydraulic limits: the drained upper limit
+# (field capacity) and the 15-bar lower limit (wilting point). These are the
+# quantities emt.pedotransfer *estimates* from texture -- having them directly
+# removes both the Saxton-Rawls regression and its organic-matter assumption
+# (see emt.model9). They are published only in SLGA **Release 1** (v1); the
+# Release 2 (v2) tree that carries clay/sand/AWC/bulk-density has no DUL or L15
+# directory contents, so they need their own URL resolver below.
+HYDRAULIC_VARS = ("soil_dul", "soil_l15")
+_V1_ONLY = set(HYDRAULIC_VARS)
 
 # Standard SLGA depth slices spanning the 0-100 cm root zone, with thickness (cm)
 # used as the depth-averaging weight. (100-200 cm is below the root zone.)
@@ -38,6 +51,58 @@ DEPTHS = [("0-5cm", 5), ("5-15cm", 10), ("15-30cm", 15),
           ("30-60cm", 30), ("60-100cm", 40)]
 
 get_filename = lambda q: f"{q.tmp_dir}/Environmental/{q.stub}_slga.nc"
+
+
+@lru_cache(maxsize=None)
+def _v1_listing(code: str) -> str:
+    """Release-1 directory listing for an attribute code (cached, retried).
+
+    Cached because a station build asks for five depths of each attribute and
+    the listing is identical for all of them; retried because a single
+    transient timeout would otherwise abort a whole multi-station build.
+    """
+    import time
+    import requests as _rq
+    url = ("https://data.tern.org.au/model-derived/slga/NationalMaps/"
+           f"SoilAndLandscapeGrid/{code}/v1/")
+    last = None
+    for attempt in range(4):
+        try:
+            r = _rq.get(url, timeout=60)
+            r.raise_for_status()
+            return r.text
+        except Exception as e:                                    # noqa: BLE001
+            last = e
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"SLGA v1 listing for {code} unreachable: {last}")
+
+
+def _v1_cog_url(attribute: str, depth: str, api_key: str) -> str:
+    """Resolve a Release-1 (v1) SLGA COG URL.
+
+    PaddockTS's ``get_cog_url`` targets v2 only. DUL and L15 exist solely in
+    v1, so resolve those from the v1 directory listing with the same
+    "newest matching release date wins" rule.
+    """
+    import re
+    from PaddockTS.Environmental.SLGASoils.slgasoils import SLGASoils as _S
+
+    code = _S.attribute_codes[attribute]
+    ds, de = _S.depth_codes[depth]
+    hits = sorted(set(re.findall(rf'({code}_{ds}_{de}_EV_[^"<>]*?\.tif)',
+                                 _v1_listing(code))))
+    if not hits:
+        raise RuntimeError(f"No SLGA v1 EV COG for {attribute} {depth}")
+    return ("https://data.tern.org.au/model-derived/slga/NationalMaps/"
+            f"SoilAndLandscapeGrid/{code}/v1/{hits[-1]}")
+
+
+def cog_url(var: str, depth: str, api_key: str) -> str:
+    """COG URL for an EMT soil variable, from whichever SLGA release has it."""
+    attr = SLGA_ATTR[var]
+    if var in _V1_ONLY:
+        return _v1_cog_url(attr, depth, api_key)
+    return get_cog_url(attr, depth, api_key)
 
 
 def _read_window(url: str, bbox) -> xr.DataArray:

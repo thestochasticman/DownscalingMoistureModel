@@ -40,6 +40,7 @@ STATICS_CSV = "data/process_terrain_statics.csv"
 SOIL_CSV = "data/process_soil_statics.csv"
 CLIMATE_CSV = "data/process_climate_statics.csv"
 PEDO_CSV = "data/process_pedotransfer_statics.csv"
+HYDRAULIC_CSV = "data/process_slga_hydraulic_statics.csv"
 
 
 def build_target(start: date = DEFAULT_START, end: date = DEFAULT_END,
@@ -156,6 +157,51 @@ def build_pedotransfer_statics(soil: pd.DataFrame,
     if out:
         stats.to_csv(out, index=False)
     return stats
+
+
+def build_hydraulic_statics(stations: list[str], buffer_deg: float = 0.01,
+                            out: str | None = HYDRAULIC_CSV) -> pd.DataFrame:
+    """Per-station SLGA drained upper limit / 15-bar limit (volumetric %).
+
+    SLGA's own measured-basis field capacity (DUL) and wilting point (L15),
+    depth-averaged over the 0-100 cm root zone like the other soil statics.
+    These are what :mod:`emt.pedotransfer` estimates from texture, so having
+    them directly removes both the Saxton-Rawls regression and its
+    organic-matter assumption (see :mod:`emt.model9`).
+
+    Published only in SLGA Release 1, hence :func:`emt.slga.cog_url` rather
+    than PaddockTS's v2-only resolver. Read straight from the COGs at each
+    station point -- these are not part of the cached per-AOI soil stack.
+    """
+    import numpy as np
+    from emt.slga import cog_url, _read_window, DEPTHS, HYDRAULIC_VARS
+    from PaddockTS.Environmental.SLGASoils.utils import (load_tern_api_key,
+                                                         _setup_tern_auth)
+    key = load_tern_api_key()
+    _setup_tern_auth(key)
+    coords = fetch_station_coords(stations).set_index("station")
+    rows = []
+    for i, stn in enumerate(stations, 1):
+        lat, lon = float(coords.loc[stn, "lat"]), float(coords.loc[stn, "lon"])
+        bbox = [lon - buffer_deg, lat - buffer_deg, lon + buffer_deg, lat + buffer_deg]
+        row = {"station": stn}
+        try:
+            for var in HYDRAULIC_VARS:
+                vals, wts = [], []
+                for depth, thick in DEPTHS:
+                    vals.append(float(_read_window(cog_url(var, depth, key), bbox).mean()))
+                    wts.append(thick)
+                row[var] = float(np.average(vals, weights=wts))
+            rows.append(row)
+            print(f"  [{i}/{len(stations)}] {stn}: DUL {row['soil_dul']:.1f} "
+                  f"L15 {row['soil_l15']:.1f}", flush=True)
+        except Exception as e:                                  # noqa: BLE001
+            print(f"  [{i}/{len(stations)}] {stn}: FAIL {type(e).__name__}: {e}",
+                  flush=True)
+    statics = pd.DataFrame(rows)
+    if out and len(statics):
+        statics.to_csv(out, index=False)
+    return statics
 
 
 def build_soil_statics(stations: list[str], start: date = DEFAULT_START,
