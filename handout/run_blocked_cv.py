@@ -41,6 +41,7 @@ from emt.model6 import model as m6
 from emt.model7.model import BucketEstimator
 from emt.model8 import model as m8
 from emt.model9 import model as m9
+from emt.model10 import model as m10
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "data"
@@ -161,6 +162,16 @@ def m8_statics_with_aridity() -> pd.DataFrame:
 awc_capacity = m8.awc_capacity
 
 
+def model10_features() -> pd.DataFrame:
+    """model6's cached feature table plus the process model's bucket state."""
+    cache = DATA / "model6_features_hybrid_2006_2010.csv"
+    if cache.exists():
+        return pd.read_csv(cache, parse_dates=["time"])
+    feat = m10.add_bucket_storage(model6_features())
+    feat.to_csv(cache, index=False)
+    return feat
+
+
 def model6_features() -> pd.DataFrame:
     cache = DATA / "model6_features_2006_2010.csv"
     if cache.exists():
@@ -210,6 +221,7 @@ RUNS = {
                 False, "model9_blockcv_nocapacity"),
     "m6":  (model6_features, m6.FEATURES, m6.build_estimator, False, "model6_blockcv"),
     "m6w": (model6_features, m6.FEATURES, m6.build_estimator, True, "model6_blockcv_weighted"),
+    "m10": (model10_features, m10.FEATURES, m10.build_estimator, False, "model10_blockcv"),
 }
 
 
