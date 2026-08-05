@@ -36,7 +36,7 @@ then apply it. Each item links to a self-contained page.
 | 5 | [Soil covariates (SLGA)](modules/slga.py.md) | Root-zone clay/sand/AWC/bulk-density |
 | 6 | [Training table](modules/features.py.md) | One row per station-day: target + all predictors |
 
-**2 · Evaluating and modelling** — how skill is measured, and eight models.
+**2 · Evaluating and modelling** — how skill is measured, and nine models.
 
 | # | Page | Role |
 |---|---|---|
@@ -50,14 +50,15 @@ then apply it. Each item links to a self-contained page.
 | 14 | [model7 · Process model](modules/model7.md) | The process track's foundation: bucket water balance, no ML (median station r 0.83) |
 | 15 | [model8 · Process model + SLGA soil](modules/model8.md) | **Recommended process model** — station-out NSE +0.41, blocked +0.32 (full stack: soil + aridity + capacity + weights) |
 | 16 | [Blocked validation](modules/blocked_validation.md) | Leave-one-**block**-out transfer skill for model6 & model8 — the honest numbers for a national product |
+| 17 | [model9 · Pedotransfer readout](modules/model9.md) | Per-site soil hydraulic limits replace two global readout constants — best blocked transfer (+0.35), narrow gain |
 
 **3 · Applying the model**
 
 | # | Page | Output |
 |---|---|---|
-| 17 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
-| 18 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
-| 19 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
+| 18 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
+| 19 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
+| 20 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
 
 ## The model
 

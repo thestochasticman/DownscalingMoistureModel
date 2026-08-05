@@ -1,7 +1,7 @@
 # Blocked validation — transfer skill, not interpolation
 
 <!-- NAV -->
-[← model8 · Process model + soil](model8.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model8 · Process model + soil](model8.md) · [Index](../README.md) · [model9 · Pedotransfer readout →](model9.md)
 <!-- /NAV -->
 
 Source: [`../run_blocked_cv.py`](../run_blocked_cv.py) ·
@@ -50,6 +50,7 @@ validation is always unweighted:
 | **model8 + capacity + aridity + weights** | **+0.322** | +0.25 | **7/9** | **+0.07** | **3.17** |
 | model6 | +0.355 | +0.09 | 5/9 | −0.21 | 3.54 |
 | model6 + weights | +0.379 | −0.14 | 4/9 | −0.27 | 3.55 |
+| [model9](model9.md) — pedotransfer readout | **+0.347** | **+0.27** | **8/9** | +0.04 | 3.18 |
 
 Station-out references on the same tables: model8 pooled **+0.397**, station
 median **+0.22**; model6 (36-station published) pooled +0.377.
@@ -86,7 +87,10 @@ within-block extreme the block table averages away: **K12**, the wettest
 station in the set (mean 39 %), is missed by ~15 % by *both* models (NSE ≈
 −16/−15) even though its block, Kyeamba, scores +0.41 — level failure is not
 only a between-block, climate-edge phenomenon; the wet extreme *within* a
-block fails the same way.
+block fails the same way. That observation is what led to
+[model9](model9.md), which traces the failure to the model's **globally fixed
+output range** — and shows the fix helps the wet *cluster* (Adelong) but not
+K12 itself.
 
 ## Findings
 
@@ -236,5 +240,5 @@ unweighted path is regression-identical to the published fits.
 
 ---
 <!-- NAV -->
-[← model8 · Process model + soil](model8.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model8 · Process model + soil](model8.md) · [Index](../README.md) · [model9 · Pedotransfer readout →](model9.md)
 <!-- /NAV -->

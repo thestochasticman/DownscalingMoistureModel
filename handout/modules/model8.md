@@ -186,6 +186,12 @@ station-median +0.07**. What remains fails at the climate-envelope *edges*
 a data limitation, not a modelling one. Full experiment, per-block tables and
 figures: [Blocked validation](blocked_validation.md).
 
+> **Successor under evaluation.** [model9](model9.md) replaces model8's two
+> *global* readout constants with per-site soil hydraulic limits from texture,
+> and scores better on blocked transfer (+0.35 vs +0.32 pooled, 8/9 blocks
+> positive vs 7/9) with one fewer parameter — but worse at station-out, with
+> the gain concentrated in a single block. model8 remains the default.
+
 ## Status
 
 model8 is the **recommended model of the process track** ([model7](model7.md)
