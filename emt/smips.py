@@ -19,11 +19,13 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from os import makedirs
 from os.path import exists
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -147,8 +149,76 @@ def smips_cube(start: date | str, end: date | str, bbox,
     return cube
 
 
+UNAVAILABLE_ATTR = "unavailable_days"
+
+
+def missing_days(cube: xr.DataArray, start: date, end: date) -> list[date]:
+    """Days in ``[start, end]`` absent from ``cube``, minus the known-unavailable.
+
+    ``smips_cube`` drops any day whose request fails (``skip_missing``), so a
+    cube fetched at high concurrency can carry the odd hole from a transient
+    ``RemoteDisconnected``. Days recorded in the cube's ``unavailable_days``
+    attribute are excluded: those were retried and are genuinely absent
+    upstream, so re-requesting them on every load would cost a round trip per
+    call forever.
+    """
+    have = pd.DatetimeIndex(cube["time"].values).normalize()
+    known = str(cube.attrs.get(UNAVAILABLE_ATTR, ""))
+    skip = {d for d in known.split(",") if d}
+    return [d.date() for d in pd.date_range(start, end, freq="D").difference(have)
+            if d.date().isoformat() not in skip]
+
+
+def repair_cube(cube: xr.DataArray, bbox, start: date, end: date,
+                var: str = "totalbucket", workers: int = 8) -> tuple[xr.DataArray, int]:
+    """Refetch any day missing from ``cube`` and merge it in.
+
+    Returns ``(cube, n_recovered)``. Days that fail again are recorded in the
+    ``unavailable_days`` attribute so later calls skip them. Refetching uses the
+    cube's original ``bbox``, so the returned day lands on the same snapped grid;
+    it is aligned onto the cube's exact coordinates as a guard.
+    """
+    gaps = missing_days(cube, start, end)
+    if not gaps:
+        return cube, 0
+
+    print(f"  repairing {len(gaps)} missing day(s): "
+          f"{[d.isoformat() for d in gaps[:5]]}"
+          f"{' ...' if len(gaps) > 5 else ''}", flush=True)
+    template = cube.isel(time=0, drop=True)
+    got, failed = [], []
+    for d in gaps:
+        try:
+            new = smips_day(d, bbox, var=var)
+        except (requests.RequestException, RuntimeError) as e:
+            print(f"    {d}: unavailable ({type(e).__name__})")
+            failed.append(d)
+            continue
+        new = new.reindex_like(template, method="nearest", tolerance=1e-6)
+        if new.shape != template.shape:
+            print(f"    {d}: grid mismatch {new.shape} vs {template.shape}, skipped")
+            failed.append(d)
+            continue
+        got.append(new.expand_dims(time=[pd.Timestamp(d)]))
+
+    attrs = dict(cube.attrs)
+    if failed:
+        known = [s for s in str(attrs.get(UNAVAILABLE_ATTR, "")).split(",") if s]
+        attrs[UNAVAILABLE_ATTR] = ",".join(sorted(set(known) | {d.isoformat() for d in failed}))
+    if not got:
+        cube.attrs = attrs
+        return cube, 0
+
+    name = cube.name
+    cube = xr.concat([cube, *got], dim="time").sortby("time")
+    cube.name = name
+    cube.attrs = attrs
+    print(f"    recovered {len(got)} day(s) -> {cube.sizes['time']} days", flush=True)
+    return cube, len(got)
+
+
 def download_smips(query: Query, var: str = "totalbucket", workers: int = 8,
-                   reload: bool = False) -> xr.DataArray:
+                   reload: bool = False, repair: bool = True) -> xr.DataArray:
     """Download (and cache) the raw SMIPS cube for ``query``.
 
     Args:
@@ -156,6 +226,12 @@ def download_smips(query: Query, var: str = "totalbucket", workers: int = 8,
         var: ``"totalbucket"`` (mm, the downscaling target) or ``"smindex"``.
         workers: Concurrent per-day WCS requests.
         reload: If True, ignore any cached file and refetch.
+        repair: Fill day-gaps before returning, whether the cube was just
+            fetched or loaded from cache, rewriting the cache when anything is
+            recovered (see :func:`repair_cube`). On a complete cube this is an
+            index comparison and costs nothing, so it is on by default -- a
+            silently short cube otherwise propagates into the training table as
+            quietly dropped station-days.
 
     Returns:
         ``(time, y, x)`` DataArray of raw SMIPS values, also written to
@@ -166,11 +242,20 @@ def download_smips(query: Query, var: str = "totalbucket", workers: int = 8,
         print(f"  cached: {filename}")
         with xr.open_dataset(filename) as ds:
             name = [v for v in ds.data_vars if v != "spatial_ref"][0]
-            return ds[name].load()
+            cube = ds[name].load()
+        if repair:
+            cube, n = repair_cube(cube, tuple(query.bbox), query.start, query.end,
+                                  var=var, workers=workers)
+            if n:
+                cube.to_dataset(name=cube.name).to_netcdf(filename)
+        return cube
 
     makedirs(f"{query.tmp_dir}/Environmental", exist_ok=True)
     print(f"  fetching SMIPS ({var}) for bbox {query.bbox} ({query.start} → {query.end})...", flush=True)
     cube = smips_cube(query.start, query.end, tuple(query.bbox), var=var, workers=workers).compute()
+    if repair:
+        cube, _ = repair_cube(cube, tuple(query.bbox), query.start, query.end,
+                              var=var, workers=workers)
     cube.to_dataset(name=cube.name).to_netcdf(filename)
     print(f"  saved: {filename} ({cube.sizes['time']} days, "
           f"{cube.sizes.get('y')}x{cube.sizes.get('x')} px)")
@@ -265,6 +350,57 @@ def smips_climatology(query: Query, var: str = "totalbucket", step_days: int = 5
     return clim
 
 
+_STUB_DATES = re.compile(r"_(\d{8})_(\d{8})_smips_")
+
+
+def repair_cache(root, var: str = "totalbucket", workers: int = 8,
+                 dry_run: bool = False) -> int:
+    """Sweep every cached SMIPS cube under ``root`` and fill its day-gaps.
+
+    :func:`download_smips` already repairs on every load, so this is only for
+    auditing a cache without touching the pipeline (or healing cubes nothing is
+    about to read). The period comes from the stub's ``_YYYYMMDD_YYYYMMDD_``
+    tag; cubes whose stub carries no dates fall back to their own first/last
+    day, which finds interior gaps but not truncated ends.
+
+    Returns the number of days recovered.
+    """
+    root = Path(root)
+    total = 0
+    cubes = sorted(root.rglob(f"*_smips_{var}.nc"))
+    print(f"{len(cubes)} cached SMIPS cube(s) under {root}")
+    for path in cubes:
+        with xr.open_dataset(path) as ds:
+            name = [v for v in ds.data_vars if v != "spatial_ref"][0]
+            cube = ds[name].load()
+        m = _STUB_DATES.search(path.name)
+        if m:
+            start, end = (pd.Timestamp(s).date() for s in m.groups())
+        else:
+            t = pd.DatetimeIndex(cube["time"].values)
+            start, end = t.min().date(), t.max().date()
+        gaps = missing_days(cube, start, end)
+        if not gaps:
+            print(f"  {path.name}: complete ({cube.sizes['time']} days)")
+            continue
+        if dry_run:
+            print(f"  {path.name}: {len(gaps)} missing -> "
+                  f"{[d.isoformat() for d in gaps[:5]]}")
+            total += len(gaps)
+            continue
+        print(f"  {path.name}:")
+        bbox = (float(cube.x.min()), float(cube.y.min()),
+                float(cube.x.max()), float(cube.y.max()))
+        cube, n = repair_cube(cube, bbox, start, end, var=var, workers=workers)
+        if n:
+            tmp = path.with_suffix(".nc.tmp")
+            cube.to_dataset(name=cube.name).to_netcdf(tmp)
+            tmp.replace(path)
+        total += n
+    print(f"\n{'would recover' if dry_run else 'recovered'} {total} day(s)")
+    return total
+
+
 def test():
     from PaddockTS.query import Query
     q = Query.from_lat_lon(-35.41928, 147.60408, 2.0,
@@ -275,4 +411,20 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    import argparse
+    from PaddockTS.config import config
+
+    ap = argparse.ArgumentParser(description="SMIPS loader: smoke test, or cache repair.")
+    ap.add_argument("--repair", nargs="?", const=None, default=False, metavar="CACHE_DIR",
+                    help="sweep cached cubes for day-gaps and refill them "
+                         "(default: the PaddockTS tmp dir)")
+    ap.add_argument("--dry-run", action="store_true", help="--repair: report only")
+    ap.add_argument("--var", default="totalbucket")
+    ap.add_argument("--workers", type=int, default=8)
+    a = ap.parse_args()
+
+    if a.repair is not False:
+        repair_cache(a.repair or config.tmp_dir, var=a.var, workers=a.workers,
+                     dry_run=a.dry_run)
+    else:
+        test()
