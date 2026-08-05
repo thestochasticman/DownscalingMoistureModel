@@ -1,7 +1,7 @@
 # Temporal validation — which kind of generalisation is actually hard
 
 <!-- NAV -->
-[← model9 · Pedotransfer readout](model9.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model9 · Pedotransfer readout](model9.md) · [Index](../README.md) · [model10 · The hybrid →](model10.md)
 <!-- /NAV -->
 
 Source: [`../run_blocked_cv.py`](../run_blocked_cv.py) (`@year` and
@@ -199,5 +199,5 @@ default block folds. Out-of-fold predictions land in
 
 ---
 <!-- NAV -->
-[← model9 · Pedotransfer readout](model9.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model9 · Pedotransfer readout](model9.md) · [Index](../README.md) · [model10 · The hybrid →](model10.md)
 <!-- /NAV -->
