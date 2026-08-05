@@ -68,6 +68,24 @@ Per-block, for the two headline configurations (blocks ordered dry → wet):
 | M2 | 0.33 | **−3.39** / +6.7 | **+0.74** / +0.2 |
 | ADELONG | 0.51 | −0.33 / −4.5 | −1.53 / −8.0 |
 
+Held-out prediction vs observation for every station under the blocked folds
+([`plot_blocked_per_station.py`](../plot_blocked_per_station.py); observed
+black, model6 blue, model8+aridity+weights green — panels grouped by block,
+dry → wet):
+
+![blocked per-station held-out series](../figures/blocked_per_station.png)
+
+The panels make the aggregate story concrete: at almost every station both
+models track the *wetting–drying rhythm* and miss (or hit) the *level* — the
+whole series sits offset. The Adelong row shows both models flat-lining
+several percent below the observed range; M2 shows model6's series riding
+above the observations while model8's sits on them. The panels also expose a
+within-block extreme the block table averages away: **K12**, the wettest
+station in the set (mean 39 %), is missed by ~15 % by *both* models (NSE ≈
+−16/−15) even though its block, Kyeamba, scores +0.41 — level failure is not
+only a between-block, climate-edge phenomenon; the wet extreme *within* a
+block fails the same way.
+
 ## Findings
 
 **1 · The station-out headlines are substantially neighbour leakage.**
@@ -132,7 +150,8 @@ SMIPS assimilated into the bucket).
 ```bash
 PYTHONPATH=. python handout/run_blocked_cv.py            # all six configurations
 PYTHONPATH=. python handout/run_blocked_cv.py m8aw       # or any subset
-PYTHONPATH=. python handout/plot_blocked_validation.py   # the figure
+PYTHONPATH=. python handout/plot_blocked_validation.py   # summary figure
+PYTHONPATH=. python handout/plot_blocked_per_station.py  # per-station series
 ```
 
 Out-of-fold predictions land in `data/model{6,8}_blockcv*_predictions.csv`.
