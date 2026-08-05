@@ -88,11 +88,13 @@ def prep(tab: pd.DataFrame, features) -> pd.DataFrame:
 
 
 def blocked_cv(sub: pd.DataFrame, features, factory, weighted: bool,
-               label: str) -> pd.DataFrame:
+               label: str, holdout_col: str = "block") -> pd.DataFrame:
+    """Hold out each ``holdout_col`` group in turn ("block", or "station" for
+    the classic leave-one-station-out with the same estimator/weights)."""
     out = sub[["station", "block", "stratum", "time", TARGET]].copy()
     out["pred"] = np.nan
-    for blk in sorted(sub["block"].unique()):
-        te = (sub["block"] == blk).values
+    for grp in sorted(sub[holdout_col].unique()):
+        te = (sub[holdout_col] == grp).values
         tr = sub.loc[~te]
         est = factory()
         if weighted:
@@ -100,7 +102,7 @@ def blocked_cv(sub: pd.DataFrame, features, factory, weighted: bool,
         else:
             est.fit(tr[features], tr[TARGET])
         out.loc[te, "pred"] = est.predict(sub.loc[te, features])
-        print(f"    {label}: held out {blk} "
+        print(f"    {label}: held out {grp} "
               f"(trained on {tr['station'].nunique()} stations)", flush=True)
     return out
 
@@ -172,9 +174,16 @@ RUNS = {
 
 
 if __name__ == "__main__":
-    for key in (sys.argv[1:] or list(RUNS)):
+    # A key suffixed "@station" runs the same configuration under classic
+    # leave-one-STATION-out folds instead (e.g. "m8capaw@station" gives the
+    # full stack's station-out numbers); output files then say "losocv".
+    for arg in (sys.argv[1:] or list(RUNS)):
+        key, _, grp = arg.partition("@")
+        holdout = grp or "block"
         loader, features, factory, weighted, name = RUNS[key]
+        if holdout != "block":
+            name = name.replace("blockcv", "losocv")
         sub = prep(loader(), features)
-        out = blocked_cv(sub, features, factory, weighted, key)
+        out = blocked_cv(sub, features, factory, weighted, arg, holdout_col=holdout)
         out.to_csv(DATA / f"{name}_predictions.csv", index=False)
         summarise(name.replace("_", " "), out)

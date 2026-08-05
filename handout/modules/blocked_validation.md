@@ -169,6 +169,30 @@ it depends on which deployment the validation is standing in for, which is
 why adopting it is a genuine trade (interpolation station-median −0.09,
 transfer pooled +0.07) rather than a free win.
 
+### The full stack at station-out, in full
+
+The candidate configuration's station-out results in the same format as the
+published model8's ([`plot_model8_fullstack_results.py`](../plot_model8_fullstack_results.py),
+[`plot_model8_fullstack_per_station.py`](../plot_model8_fullstack_per_station.py);
+reproduce the predictions with `run_blocked_cv.py m8capaw@station`):
+
+![full-stack station-out results](../figures/model8_fullstack_results.png)
+
+![full-stack station-out per-station series](../figures/model8_fullstack_per_station.png)
+
+Panel (c) and the per-station grid show where the station-median cost lives:
+the biggest single regression is **A5** (+0.54 → −1.79, bias +8.4 %) — with
+aridity in the statics, held-out Adelong stations are pulled toward the
+global climate–moisture relation, which helps the block's outliers (A1
+−1.85 → −0.87, A2/A3 up) but overshoots its best-behaved station. The M-sites
+are the mirror image: M1 flips positive (−0.59 → +0.21), M7 improves
+−7.3 → −4.4, M2/M4/M5 all rise — the same climate channel that costs a
+cluster's easiest station buys skill exactly where stations stand alone.
+K12's ~−16 is untouched by any of it, consistent with its wet extreme being
+outside what any static can encode. Aggregate per-block (station-out folds):
+Adelong lands at **+0.11 with bias −0.44** — against **−1.03 / −7.1 blocked**
+— the leakage mechanism stated as a single comparison.
+
 ## Implications
 
 * **The honest headline for a national product is the blocked one:** model8
@@ -191,10 +215,13 @@ transfer pooled +0.07) rather than a free win.
 ## Reproduce
 
 ```bash
-PYTHONPATH=. python handout/run_blocked_cv.py            # all six configurations
-PYTHONPATH=. python handout/run_blocked_cv.py m8aw       # or any subset
-PYTHONPATH=. python handout/plot_blocked_validation.py   # summary figure
-PYTHONPATH=. python handout/plot_blocked_per_station.py  # per-station series
+PYTHONPATH=. python handout/run_blocked_cv.py                # every blocked configuration
+PYTHONPATH=. python handout/run_blocked_cv.py m8capaw        # or any subset
+PYTHONPATH=. python handout/run_blocked_cv.py m8capaw@station  # full stack, station-out folds
+PYTHONPATH=. python handout/plot_blocked_validation.py       # summary figure
+PYTHONPATH=. python handout/plot_blocked_per_station.py      # blocked per-station series
+PYTHONPATH=. python handout/plot_model8_fullstack_results.py       # full stack station-out, 4-panel
+PYTHONPATH=. python handout/plot_model8_fullstack_per_station.py   # full stack station-out, series
 ```
 
 Out-of-fold predictions land in `data/model{6,8}_blockcv*_predictions.csv`.
