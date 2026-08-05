@@ -115,7 +115,7 @@ for sp in ("left", "bottom"):
 # ---------------------------------------------------------------- footer
 fig.text(.075, .050,
          f"Rainfall {rain_2025:.0f} mm in 2025  ·  aridity P/PET {aridity:.2f}, "
-         f"inside the calibrated range 0.15–0.60  ·  nearest calibration station 34 km",
+         f"inside the calibrated range 0.15–0.60",
          fontsize=10, color=MID)
 fig.text(.075, .020,
          "No sensor on site: the seasonal timing is dependable, the absolute level "
