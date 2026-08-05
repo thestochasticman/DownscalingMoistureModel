@@ -85,14 +85,19 @@ def prep(tab: pd.DataFrame, features) -> pd.DataFrame:
     sub = tab.dropna(subset=list(features) + [TARGET]).reset_index(drop=True).copy()
     sub["block"] = sub["station"].map(block_of)
     sub["stratum"] = sub["station"].map(strata_from_forcing())
+    sub["year"] = pd.to_datetime(sub["time"]).dt.year
     return sub
 
 
 def blocked_cv(sub: pd.DataFrame, features, factory, weighted: bool,
                label: str, holdout_col: str = "block") -> pd.DataFrame:
-    """Hold out each ``holdout_col`` group in turn ("block", or "station" for
-    the classic leave-one-station-out with the same estimator/weights)."""
-    out = sub[["station", "block", "stratum", "time", TARGET]].copy()
+    """Hold out each ``holdout_col`` group in turn.
+
+    ``"block"`` is the spatial design; ``"station"`` reproduces the classic
+    leave-one-station-out folds with the same estimator; ``"year"`` holds out a
+    whole calendar year, testing transfer across hydrological regimes.
+    """
+    out = sub[["station", "block", "stratum", "year", "time", TARGET]].copy()
     out["pred"] = np.nan
     for grp in sorted(sub[holdout_col].unique()):
         te = (sub[holdout_col] == grp).values
@@ -196,15 +201,15 @@ RUNS = {
 
 
 if __name__ == "__main__":
-    # A key suffixed "@station" runs the same configuration under classic
-    # leave-one-STATION-out folds instead (e.g. "m8capaw@station" gives the
-    # full stack's station-out numbers); output files then say "losocv".
+    # A key may be suffixed with the fold design: "@station" for classic
+    # leave-one-STATION-out, "@year" for leave-one-YEAR-out (temporal
+    # transfer). Output files are tagged blockcv / losocv / yearcv to match.
     for arg in (sys.argv[1:] or list(RUNS)):
         key, _, grp = arg.partition("@")
         holdout = grp or "block"
         loader, features, factory, weighted, name = RUNS[key]
-        if holdout != "block":
-            name = name.replace("blockcv", "losocv")
+        tag = {"block": "blockcv", "station": "losocv", "year": "yearcv"}[holdout]
+        name = name.replace("blockcv", tag)
         sub = prep(loader(), features)
         out = blocked_cv(sub, features, factory, weighted, arg, holdout_col=holdout)
         out.to_csv(DATA / f"{name}_predictions.csv", index=False)

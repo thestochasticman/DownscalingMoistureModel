@@ -198,8 +198,10 @@ model8 is the **recommended model of the process track** ([model7](model7.md)
 stays as its covariate-free foundation) and a full peer of
 [model6](model6.md): station-out parity pooled, clearly better transfer, 14
 interpretable parameters, no training table, and no dependence on SMIPS at
-all. Its caveats are the shared ones — no temporal hold-out, no validation
-outside the Murrumbidgee — plus the harness distinction above: the
+all. Its caveats are the shared ones — no validation outside the Murrumbidgee
+(the temporal hold-out has since been done: see
+[temporal validation](temporal_validation.md), which finds the "any date"
+claim sound for ordinary years and optimistic for exceptionally wet ones) — plus the harness distinction above: the
 station-out skill is the interpolation figure, the
 [blocked](blocked_validation.md) +0.32 the transfer figure. The two tracks
 fail differently (see the blocked page's per-block table), which is what makes

@@ -214,9 +214,10 @@ Adelong lands at **+0.11 with bias −0.44** — against **−1.03 / −7.1 bloc
   investments are a pedotransfer readout (θ from SLGA bulk density / AWC
   rather than two fitted globals) and, above all, the national in-situ
   network the README already plans — a catchment cannot validate a continent.
-* Not yet done, and material: a **temporal** hold-out (year folds). 2006–2010
-  spans the Millennium Drought's tail and its 2010 break, and model8's
-  headline feature is running forward to the present.
+* **Done since:** the [temporal hold-out](temporal_validation.md). Time turns
+  out to be the *easy* axis — the same model scores +0.475 on year folds
+  against +0.322 here — with only the drought-breaking 2010 collapsing, and in
+  the same too-dry direction as the spatial wet edge.
 
 ## Reproduce
 

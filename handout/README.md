@@ -51,14 +51,15 @@ then apply it. Each item links to a self-contained page.
 | 15 | [model8 · Process model + SLGA soil](modules/model8.md) | **Recommended process model** — station-out NSE +0.41, blocked +0.32 (full stack: soil + aridity + capacity + weights) |
 | 16 | [Blocked validation](modules/blocked_validation.md) | Leave-one-**block**-out transfer skill for model6 & model8 — the honest numbers for a national product |
 | 17 | [model9 · Pedotransfer readout](modules/model9.md) | Per-site soil hydraulic limits replace two global readout constants — best blocked transfer (+0.35), narrow gain |
+| 18 | [Temporal validation](modules/temporal_validation.md) | Leave-one-**year**-out across the drought break — time is the easy axis, space is the hard one |
 
 **3 · Applying the model**
 
 | # | Page | Output |
 |---|---|---|
-| 18 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
-| 19 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
-| 20 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
+| 19 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
+| 20 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
+| 21 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
 
 ## The model
 

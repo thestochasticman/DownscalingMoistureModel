@@ -1,7 +1,7 @@
 # `model9`: a pedotransfer readout — physics where two constants used to be
 
 <!-- NAV -->
-[← Blocked validation](blocked_validation.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← Blocked validation](blocked_validation.md) · [Index](../README.md) · [Temporal validation →](temporal_validation.md)
 <!-- /NAV -->
 
 Source: [`../../emt/model9/model.py`](../../emt/model9/model.py) ·
@@ -147,8 +147,8 @@ identical to the full-record run at every lead-in tested.
   refinement, and the estimates are mildly sensitive to it.
 * **Bulk density is unused** by the readout, though Saxton–Rawls has density
   corrections that could take it.
-* The **shared caveats** stand: no temporal hold-out, no validation outside the
-  Murrumbidgee, and 9 independent blocks is a small sample on which to prefer
+* The **shared caveats** stand: no validation outside the Murrumbidgee
+  ([temporal validation](temporal_validation.md) is now done), and 9 independent blocks is a small sample on which to prefer
   one configuration over another by ~0.02 NSE.
 
 ## Status
@@ -186,5 +186,5 @@ PYTHONPATH=. python handout/plot_model9_readout.py        # the figure
 
 ---
 <!-- NAV -->
-[← Blocked validation](blocked_validation.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← Blocked validation](blocked_validation.md) · [Index](../README.md) · [Temporal validation →](temporal_validation.md)
 <!-- /NAV -->

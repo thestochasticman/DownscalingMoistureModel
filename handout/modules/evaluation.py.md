@@ -110,14 +110,25 @@ are dropped first; fewer than two valid points returns NaNs.
 | `r` | Pearson correlation |
 | `nse` | Nash-Sutcliffe efficiency, 1 − Σ(pred − obs)² / Σ(obs − mean obs)². NSE = 1 perfect, > 0 more skilful than the observed mean, < 0 worse. Returned again as `r2`; the two are identical. |
 
-## Caveat: no temporal hold-out
+## The split here is purely spatial
 
-The split is **purely spatial**. Within the training stations, all days are used;
-there is no forecasting into unseen time. LOSO therefore measures **spatial
-transfer** (predicting a new location), not temporal extrapolation (predicting a
-future date). The leave-region-out downscaling demonstration
-([`downscale.py`](downscale.py.md)) is the same idea at coarser granularity — a
-whole catchment is withheld instead of one station.
+Within the training stations, all days are used; this harness does no
+forecasting into unseen time. LOSO measures **spatial transfer** (predicting a
+new location), not temporal extrapolation. The leave-region-out downscaling
+demonstration ([`downscale.py`](downscale.py.md)) is the same idea at coarser
+granularity — a whole catchment withheld instead of one station.
+
+Two later pages extend the harness along both axes, and the choice matters more
+than any single model change in this handout:
+
+* [**Blocked validation**](blocked_validation.md) holds out whole *districts*,
+  not single stations — because 26 of the 37 stations sit in two tight clusters,
+  so leave-one-station-out leaves near neighbours in training.
+* [**Temporal validation**](temporal_validation.md) holds out whole *years*
+  across the Millennium Drought's break.
+
+For the same model8, pooled NSE reads **+0.475** (year), **+0.408** (station)
+and **+0.322** (block). Always state which harness a number came from.
 
 ---
 <!-- NAV -->

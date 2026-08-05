@@ -1,7 +1,7 @@
 # `downscale.py`: 30 m field generation (Stage 6)
 
 <!-- NAV -->
-[← model9 · Pedotransfer readout](model9.md) · [Index](../README.md) · [Use the model →](predict.py.md)
+[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [Use the model →](predict.py.md)
 <!-- /NAV -->
 
 Source: [`../../emt/downscale.py`](../../emt/downscale.py)
@@ -79,5 +79,5 @@ preserving the fine structure while removing the per-cell offset.
 
 ---
 <!-- NAV -->
-[← model9 · Pedotransfer readout](model9.md) · [Index](../README.md) · [Use the model →](predict.py.md)
+[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [Use the model →](predict.py.md)
 <!-- /NAV -->
