@@ -62,6 +62,13 @@ PARAM_NAMES = ("smax", "alpha", "k", "theta_r", "dtheta")
 BOUNDS = ((50.0, 400.0), (0.05, 2.0), (5e-4, 0.2), (2.0, 25.0), (5.0, 45.0))
 X0 = (150.0, 0.6, 0.02, 8.0, 25.0)
 
+# The pedotransfer-readout variant (``readout_limits=``, i.e. model9): the two
+# calibrated readout levels are replaced by per-station soil hydraulic limits,
+# leaving one calibrated scale on the site's range.
+PARAM_NAMES_PTF = ("smax", "alpha", "k", "gamma")
+BOUNDS_PTF = ((50.0, 400.0), (0.05, 2.0), (5e-4, 0.2), (0.2, 5.0))
+X0_PTF = (150.0, 0.6, 0.02, 1.4)
+
 _RAIN, _PET = "daily_rain", "et_morton_potential"
 
 
@@ -127,7 +134,8 @@ class Forcing:
             raise KeyError(f"no forcing for station(s): {missing}")
         return rows, cols.to_numpy(dtype=int)
 
-    def vwc(self, x: np.ndarray, cap_rel: np.ndarray | None = None) -> np.ndarray:
+    def vwc(self, x: np.ndarray, cap_rel: np.ndarray | None = None,
+            readout: tuple[np.ndarray, np.ndarray] | None = None) -> np.ndarray:
         """Simulate all stations and map storage -> volumetric %.
 
         ``cap_rel`` (optional, per-station, mean 1 over the training stations)
@@ -135,8 +143,20 @@ class Forcing:
         the *global* ``smax`` as its mm->% denominator, so higher-capacity
         stations can genuinely sit wetter -- this is where a soil covariate
         (e.g. SLGA AWC) injects between-station level structure physically.
+
+        ``readout`` (optional, ``(theta_r_i, dtheta_i)`` per-station vectors)
+        replaces the two *global* readout constants with per-station soil
+        hydraulic limits -- the model9 configuration. With it, ``x`` is
+        ``(smax, alpha, k, gamma)`` and the site's range is ``gamma *
+        dtheta_i``; a single calibrated scale replaces two calibrated levels,
+        and the model's output range varies by site instead of being a global
+        ceiling (see :mod:`emt.pedotransfer`).
         """
-        smax, alpha, k, theta_r, dtheta = x
+        if readout is None:
+            smax, alpha, k, theta_r, dtheta = x
+        else:
+            smax, alpha, k, gamma = x[0], x[1], x[2], x[3]
+            theta_r, dtheta = readout[0], gamma * readout[1]
         smax_i = np.full(self.rain.shape[1], smax) if cap_rel is None else smax * cap_rel
         storage = _step_loop(self.rain, self.pet, smax_i, alpha, k)
         return theta_r + dtheta * storage / smax
@@ -179,7 +199,7 @@ class BucketEstimator:
     def __init__(self, forcing: Forcing | None = None,
                  static: pd.DataFrame | None = None,
                  capacity: pd.Series | None = None,
-                 weight_fn=None,
+                 weight_fn=None, readout_limits: pd.DataFrame | None = None,
                  n_starts: int = 3, maxfev: int = 800, seed: int = 0):
         self.forcing = forcing
         self.static = static
@@ -189,6 +209,11 @@ class BucketEstimator:
         # its weighting (e.g. model8's stratified weights) while running
         # unchanged through the shared est.fit(X, y) harness.
         self.weight_fn = weight_fn
+        # Optional per-station soil hydraulic limits (index = station, columns
+        # theta_r / dtheta): replaces the two GLOBAL readout constants with
+        # physically-derived per-site ones, leaving a single scale `gamma` to
+        # calibrate. See Forcing.vwc and emt.model9.
+        self.readout_limits = readout_limits
         self.n_starts = n_starts
         self.maxfev = maxfev
         self.seed = seed
@@ -224,21 +249,32 @@ class BucketEstimator:
             self.cap_train_mean_ = float(train_mean)
             self._cap_rel = cap / float(train_mean)
 
-        # Stage 1: calibrate the 5 bucket parameters (statics play no part).
-        lo = np.array([b[0] for b in BOUNDS])
-        hi = np.array([b[1] for b in BOUNDS])
+        # Per-station soil hydraulic limits, aligned to the forcing's station
+        # order (model9). Every station carries its own; nothing is fitted here.
+        self._readout = None
+        if self.readout_limits is not None:
+            lim = self.readout_limits.reindex(f.stations)
+            self._readout = (lim["theta_r"].to_numpy(dtype=float),
+                             lim["dtheta"].to_numpy(dtype=float))
+
+        # Stage 1: calibrate the bucket parameters (statics play no part).
+        names_ = PARAM_NAMES_PTF if self._readout is not None else PARAM_NAMES
+        bounds_ = BOUNDS_PTF if self._readout is not None else BOUNDS
+        start0 = X0_PTF if self._readout is not None else X0
+        lo = np.array([b[0] for b in bounds_])
+        hi = np.array([b[1] for b in bounds_])
 
         def loss(x: np.ndarray) -> float:
             if (x < lo).any() or (x > hi).any():
                 return 1e6 + float(np.abs(np.clip(x, lo, hi) - x).sum())
-            err = f.vwc(x, self._cap_rel)[rows, cols] - yv
+            err = f.vwc(x, self._cap_rel, self._readout)[rows, cols] - yv
             if w is None:
                 return float(np.sqrt(np.nanmean(err ** 2)))
             m = np.isfinite(err)
             return float(np.sqrt(np.sum(w[m] * err[m] ** 2) / np.sum(w[m])))
 
         rng = np.random.default_rng(self.seed)
-        x0 = np.array(X0)
+        x0 = np.array(start0)
         best = None
         for i in range(self.n_starts):
             start = x0 if i == 0 else np.clip(
@@ -248,7 +284,8 @@ class BucketEstimator:
             if best is None or res.fun < best.fun:
                 best = res
         x = best.x
-        names, values = list(PARAM_NAMES), list(x)
+        names, values = list(names_), list(x)
+        self._n_process = len(names_)
         self.rmse_ = float(best.fun)
 
         # Stage 2: ridge the per-station mean residual on the statics. With
@@ -259,7 +296,7 @@ class BucketEstimator:
             self._static_vars = list(self.static.columns)
             rf = pd.DataFrame({
                 "station": np.asarray(X["station"]),
-                "err": yv - f.vwc(x, self._cap_rel)[rows, cols],
+                "err": yv - f.vwc(x, self._cap_rel, self._readout)[rows, cols],
                 "w": np.ones(len(yv)) if w is None else w,
             })
             g = rf.groupby("station")
@@ -290,7 +327,8 @@ class BucketEstimator:
         x = self.params_.to_numpy()
         return float(x[0]), float(x[1]), float(x[2])
 
-    def readout(self, storage: np.ndarray, statics: np.ndarray | None = None) -> np.ndarray:
+    def readout(self, storage: np.ndarray, statics: np.ndarray | None = None,
+                limits: tuple | None = None) -> np.ndarray:
         """Map bucket storage (mm) to volumetric %, with the fitted offsets.
 
         The inference counterpart of :meth:`predict`: it takes *storage the
@@ -298,13 +336,26 @@ class BucketEstimator:
         instead of indexing the training forcing store. ``statics`` is an
         ``(n, n_statics)`` array in the fitted ``_static_vars`` order,
         standardised here by the training mean/std.
+
+        ``limits`` (``(theta_r, dtheta)``, scalars or per-row arrays) supplies
+        the location's soil hydraulic limits for a pedotransfer-readout fit
+        (model9); it is required for such a fit and ignored otherwise.
         """
         x = self.params_.to_numpy()
-        smax, theta_r, dtheta = x[0], x[3], x[4]
+        n = getattr(self, "_n_process", 5)
+        smax = x[0]
+        if n == 4:                                    # pedotransfer readout
+            if limits is None:
+                raise ValueError("this fit needs per-location (theta_r, dtheta) "
+                                 "limits -- pass limits=(theta_r, dtheta)")
+            theta_r = np.asarray(limits[0], dtype=float)
+            dtheta = x[3] * np.asarray(limits[1], dtype=float)
+        else:
+            theta_r, dtheta = x[3], x[4]
         vwc = theta_r + dtheta * np.asarray(storage, dtype=float) / smax
         if statics is not None:
             z = (np.asarray(statics, dtype=float) - self._static_mean) / self._static_std
-            vwc = vwc + z @ x[5:-1] + x[-1]
+            vwc = vwc + z @ x[n:-1] + x[-1]
         return vwc
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -312,9 +363,10 @@ class BucketEstimator:
             raise RuntimeError("fit before predict")
         rows, cols = self._forcing().index(X)
         x = self.params_.to_numpy()
-        pred = self._forcing().vwc(x[:5], self._cap_rel)[rows, cols]
+        n = getattr(self, "_n_process", 5)
+        pred = self._forcing().vwc(x[:n], self._cap_rel, self._readout)[rows, cols]
         if self.static is not None:
-            pred = pred + self._static_matrix(X["station"]) @ x[5:-1] + x[-1]
+            pred = pred + self._static_matrix(X["station"]) @ x[n:-1] + x[-1]
         return pred
 
 

@@ -12,6 +12,8 @@ Outputs (``data/``, gitignored like every other table)::
     process_forcing_2005_2010.csv    per-station daily rain / PET / VPD
     process_climate_statics.csv      per-station climate normals (rain, PET,
                                      aridity P/PET) derived from the forcing
+    process_pedotransfer_statics.csv per-station wilting point / field capacity
+                                     / saturation, from soil texture (model9)
     process_terrain_statics.csv      per-station TERRAIN_VARS at the point
     process_soil_statics.csv         per-station SLGA SOIL_VARS (needs a TERN
                                      key; skipped with a notice if absent)
@@ -37,6 +39,7 @@ FORCING_CSV = "data/process_forcing_2005_2010.csv"
 STATICS_CSV = "data/process_terrain_statics.csv"
 SOIL_CSV = "data/process_soil_statics.csv"
 CLIMATE_CSV = "data/process_climate_statics.csv"
+PEDO_CSV = "data/process_pedotransfer_statics.csv"
 
 
 def build_target(start: date = DEFAULT_START, end: date = DEFAULT_END,
@@ -138,6 +141,23 @@ def build_climate_statics(forcing: pd.DataFrame,
     return stats
 
 
+def build_pedotransfer_statics(soil: pd.DataFrame,
+                               out: str | None = PEDO_CSV) -> pd.DataFrame:
+    """Per-station soil hydraulic limits from texture (no extra fetch).
+
+    Saxton & Rawls (2006) wilting point / field capacity / saturation from the
+    SLGA clay and sand already in ``process_soil_statics.csv`` -- model9's
+    per-site readout, replacing model7/model8's two global readout constants
+    (see :mod:`emt.pedotransfer`).
+    """
+    from emt.pedotransfer import limits
+    L = limits(soil["soil_clay"], soil["soil_sand"])
+    stats = pd.DataFrame({"station": soil["station"], **L})
+    if out:
+        stats.to_csv(out, index=False)
+    return stats
+
+
 def build_soil_statics(stations: list[str], start: date = DEFAULT_START,
                        end: date = DEFAULT_END,
                        out: str | None = SOIL_CSV) -> pd.DataFrame:
@@ -184,6 +204,10 @@ def build(start: date = DEFAULT_START, end: date = DEFAULT_END) -> None:
     else:
         soil = build_soil_statics(stations, start, end)
         print(f"  {len(soil)} stations", flush=True)
+        if len(soil):
+            print("=== pedotransfer statics (from texture) ===", flush=True)
+            pedo = build_pedotransfer_statics(soil)
+            print(f"  {len(pedo)} stations", flush=True)
 
 
 if __name__ == "__main__":

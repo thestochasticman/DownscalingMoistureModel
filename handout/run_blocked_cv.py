@@ -40,6 +40,7 @@ from emt.evaluation import metrics
 from emt.model6 import model as m6
 from emt.model7.model import BucketEstimator
 from emt.model8 import model as m8
+from emt.model9 import model as m9
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "data"
@@ -177,6 +178,18 @@ RUNS = {
                 lambda: BucketEstimator(static=m8_statics_with_aridity(),
                                         capacity=awc_capacity()),
                 True, "model8_blockcv_capacity_aridity_weighted"),
+    "m9":  (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
+            m8.FEATURES, m9.build_estimator, False, "model9_blockcv"),
+    "m9sat": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
+              m8.FEATURES, lambda: m9.build_estimator(span="saturation"),
+              False, "model9_blockcv_saturation"),
+    "m9noarid": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
+                 m8.FEATURES,
+                 lambda: m9.build_estimator(static=m8.load_statics(climate=False)),
+                 False, "model9_blockcv_noaridity"),
+    "m9nocap": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
+                m8.FEATURES, lambda: m9.build_estimator(capacity=None),
+                False, "model9_blockcv_nocapacity"),
     "m6":  (model6_features, m6.FEATURES, m6.build_estimator, False, "model6_blockcv"),
     "m6w": (model6_features, m6.FEATURES, m6.build_estimator, True, "model6_blockcv_weighted"),
 }
