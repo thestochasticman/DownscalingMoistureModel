@@ -129,6 +129,13 @@ def m8_statics_with_aridity() -> pd.DataFrame:
     return m8.load_statics().join(clim[["aridity"]], how="inner")
 
 
+def awc_capacity() -> pd.Series:
+    """SLGA AWC as per-station bucket capacity (model8's 'tested and not
+    defaulted' physical route -- it stacks with aridity+weights under blocked
+    validation even though its solo station-out gain was negligible)."""
+    return pd.read_csv(DATA / "process_soil_statics.csv").set_index("station")["soil_awc"]
+
+
 def model6_features() -> pd.DataFrame:
     cache = DATA / "model6_features_2006_2010.csv"
     if cache.exists():
@@ -150,6 +157,15 @@ RUNS = {
     "m8aw": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
              m8.FEATURES, lambda: BucketEstimator(static=m8_statics_with_aridity()),
              True, "model8_blockcv_aridity_weighted"),
+    "m8cap": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
+              m8.FEATURES,
+              lambda: BucketEstimator(static=m8.load_statics(), capacity=awc_capacity()),
+              False, "model8_blockcv_capacity"),
+    "m8capaw": (lambda: pd.read_csv(DATA / "process_target_2006_2010.csv", parse_dates=["time"]),
+                m8.FEATURES,
+                lambda: BucketEstimator(static=m8_statics_with_aridity(),
+                                        capacity=awc_capacity()),
+                True, "model8_blockcv_capacity_aridity_weighted"),
     "m6":  (model6_features, m6.FEATURES, m6.build_estimator, False, "model6_blockcv"),
     "m6w": (model6_features, m6.FEATURES, m6.build_estimator, True, "model6_blockcv_weighted"),
 }

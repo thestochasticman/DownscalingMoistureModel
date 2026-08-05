@@ -52,7 +52,11 @@ Held-out predicted-vs-observed time series for every station
   (+0.16 vs +0.15 pooled alone; no gain on top of the offsets) because AWC
   barely varies across these 37 stations (10.9 ± 0.7 %). The machinery stays
   in [`model7/model.py`](../../emt/model7/model.py) for regions with real AWC
-  contrast.
+  contrast. **Revisited under blocked validation**: stacked on the aridity
+  static and stratified weights it becomes part of the best transfer
+  configuration measured (blocked pooled +0.32, the first positive blocked
+  station-median) while costing nothing at station-out — see the
+  [blocked-validation page](blocked_validation.md).
 * **Soil offsets without terrain** scored the same pooled (+0.41) but much
   worse per-station (median NSE +0.05 vs +0.22); the terrain trio earns its
   place alongside soil.

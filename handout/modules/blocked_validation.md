@@ -45,7 +45,9 @@ validation is always unweighted:
 | model8 | +0.222 | +0.25 | 6/9 | −0.18 | 4.03 |
 | model8 + weights | +0.234 | +0.27 | 6/9 | −0.04 | 3.52 |
 | model8 + aridity | +0.256 | +0.23 | 7/9 | −0.02 | 3.81 |
-| **model8 + aridity + weights** | **+0.290** | **+0.27** | **7/9** | **−0.01** | **3.33** |
+| model8 + aridity + weights | +0.290 | +0.27 | 7/9 | −0.01 | 3.33 |
+| model8 + AWC capacity | +0.238 | +0.23 | 6/9 | −0.25 | 4.00 |
+| **model8 + capacity + aridity + weights** | **+0.322** | +0.25 | **7/9** | **+0.07** | **3.17** |
 | model6 | +0.355 | +0.09 | 5/9 | −0.21 | 3.54 |
 | model6 + weights | +0.379 | −0.14 | 4/9 | −0.27 | 3.55 |
 
@@ -112,6 +114,19 @@ aridity coefficient far beyond the training range, and rightly shrinks it. **No
 reweighting or covariate fixes an empty region of predictor space — only
 observations there do.**
 
+**3b · The physical capacity route, dropped under station-out, earns its
+place under blocking.** [model8's page](model8.md#what-was-tested-and-not-defaulted)
+tested SLGA AWC as *per-station bucket capacity* (`capacity=` — higher-AWC
+soils genuinely hold and read out more water) and did not default it: its
+solo station-out gain was negligible because AWC barely varies here
+(10.9 ± 0.7 %). Alone it is indeed weak blocked too (+0.24 pooled,
+station-median −0.25). But **stacked on aridity + weights it is the best
+configuration measured**: blocked pooled **+0.322**, the first *positive*
+blocked station-median (**+0.07**), median |bias| 3.17, Adelong −1.53 → −1.03
+— while at station-out it is free (pooled +0.408 vs the published +0.397,
+median |bias| 3.57). The physical and statistical fixes address different
+parts of the level error and compose.
+
 **4 · Weights help model8 and hurt model6.** model6's block-median *drops*
 under the same weights (+0.09 → −0.14, 4/9 blocks positive): up-weighting
 single M-stations pushes a 127-leaf boosting model to fit their quirks in a
@@ -136,11 +151,12 @@ normals (mean rain, PET, **aridity**) were tested in the same offset slot and
 *reduced* station-out skill. That result is real and **replicates on model8**
 — the contradiction is between harnesses, not results:
 
-| model8 config | station-out pooled / stn-median | blocked pooled / block-median |
+| model8 config | station-out pooled / stn-median | blocked pooled / stn-median |
 |---|---|---|
-| published (soil + terrain) | **+0.397 / +0.22** | +0.222 / +0.25 |
-| + aridity | +0.388 / +0.13 | +0.256 / +0.23 |
-| + aridity + weights | +0.403 / +0.13 | **+0.290 / +0.27** |
+| published (soil + terrain) | **+0.397 / +0.22** | +0.222 / −0.18 |
+| + aridity | +0.388 / +0.13 | +0.256 / −0.02 |
+| + aridity + weights | +0.403 / +0.13 | +0.290 / −0.01 |
+| + capacity + aridity + weights | +0.408 / +0.13 | **+0.322 / +0.07** |
 
 Under **station-out**, a held-out station's cluster neighbours — with its
 climate — are in training, so a climate normal adds no new information and
@@ -160,8 +176,10 @@ transfer pooled +0.07) rather than a free win.
   climate envelope* (aridity ≈ 0.15–0.6), and degrades to level failure
   outside it. The station-out +0.40 remains the right figure for the
   interpolation use-case (predicting near an instrumented site).
-* The aridity static + stratified weights are cheap, principled and
-  monotone improvements for model8 — candidates for its default configuration.
+* The aridity static + stratified weights + AWC capacity are cheap,
+  principled improvements for model8 — candidates for its default
+  configuration (the full stack costs 0.09 station-median at station-out;
+  everything else improves in both harnesses).
 * The remaining edge failure is a **data** limitation. The productive next
   investments are a pedotransfer readout (θ from SLGA bulk density / AWC
   rather than two fitted globals) and, above all, the national in-situ
