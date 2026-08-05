@@ -80,7 +80,10 @@ def build_estimator(span: str = READOUT_SPAN, **kwargs) -> BucketEstimator:
     kwargs.setdefault("capacity", awc_capacity())
     kwargs.setdefault("weight_fn", stratified_weights)
     kwargs.setdefault("readout_limits", load_readout_limits(span=span))
-    return BucketEstimator(**kwargs)
+    est = BucketEstimator(**kwargs)
+    # Recorded so inference can rebuild the same limits per pixel from texture.
+    est.readout_span_ = span
+    return est
 
 
 def ensure_features(table: pd.DataFrame) -> pd.DataFrame:

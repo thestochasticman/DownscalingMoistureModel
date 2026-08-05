@@ -164,6 +164,20 @@ a 0.02 NSE difference.
 Its lasting contribution is the diagnosis: **a global readout imposes a global
 ceiling**, and the fix belongs in the physics rather than in the offsets.
 
+Inference works through the existing tool — the readout limits are rebuilt per
+pixel from the same SLGA clay/sand the statics come from, so nothing extra is
+fetched:
+
+```bash
+PYTHONPATH=. python -m emt.model8.predict --model model9 \
+    --lat -35.05 --lon 147.5 --start 2025-06-01 --end 2025-06-03
+PYTHONPATH=. python -m emt.model8.predict --model model9 \
+    --bbox 147.45 -35.10 147.55 -35.00 --date 2025-06-01
+```
+
+Verified: the inference path reproduces the training path to machine precision
+at K5 (max |Δ| 0.0) with the pedotransfer readout and capacity engaged.
+
 ```bash
 PYTHONPATH=. python handout/run_blocked_cv.py m9          # blocked folds
 PYTHONPATH=. python handout/run_blocked_cv.py m9@station  # station-out folds

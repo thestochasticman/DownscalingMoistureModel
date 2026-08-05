@@ -149,25 +149,49 @@ def _aridity(silo: pd.DataFrame) -> float:
     over the fetched window (spin-up start -> end, >= 2 calendar years). P/PET
     is a stable ratio, so the window difference moves the static by well under
     one training standard deviation.
+
+    One consequence worth knowing: because the window depends on the requested
+    period, the *same* day predicted with a different ``--end`` gets a very
+    slightly different aridity static, hence a slightly different level. The
+    effect is tiny (measured ~0.001 % VWC between a 3-day and a 5-day request,
+    with storage bit-identical) but it is not exactly zero.
     """
     return float(silo[_RAIN].mean() / silo[_PET].mean())
 
 
+def _pedo_limits(model, clay, sand):
+    """Per-location ``(theta_r, dtheta)`` for a pedotransfer-readout fit.
+
+    Returns ``None`` for the 5-parameter fits (model7/model8), whose readout
+    constants are global and already in ``params_``. For model9 the limits are
+    rebuilt per pixel from the same SLGA clay/sand the statics come from, using
+    the span the estimator was built with.
+    """
+    if getattr(model, "_n_process", 5) != 4:
+        return None
+    from emt.pedotransfer import wilting_point, field_capacity, saturation
+    wp = wilting_point(clay, sand)
+    top = (saturation(clay, sand) if getattr(model, "readout_span_", "available")
+           == "saturation" else field_capacity(clay, sand))
+    return (wp, top - wp)
+
+
 def _statics_at_point(q: Query, lon: float, lat: float, model,
-                      silo: pd.DataFrame) -> tuple[np.ndarray, float]:
-    """Statics at one point in the *fitted* model's variable order, + AWC.
+                      silo: pd.DataFrame) -> tuple[np.ndarray, dict]:
+    """Statics at one point in the *fitted* model's variable order, + raw values.
 
     Sources per variable: SLGA rasters (soil), the 30 m DEM stack (terrain),
     and the SILO series (``aridity``). Driven by ``model._static_vars`` so an
-    older fit (no aridity) keeps working unchanged.
+    older fit (no aridity) keeps working unchanged. The raw dict carries the
+    soil values inference needs beyond the statics themselves (AWC for the
+    capacity ratio, clay/sand for a pedotransfer readout).
     """
     soil, terr = soil_covariates(q), terrain_covariates(q)
     src = {**{v: soil[v] for v in SOIL_VARS},
            **{v: terr[v] for v in TERRAIN_STATIC_VARS}}
     vals = {v: float(sample_points(src[v], lon, lat).values) for v in src}
     vals["aridity"] = _aridity(silo)
-    return (np.array([[vals[v] for v in model._static_vars]]),
-            vals["soil_awc"])
+    return np.array([[vals[v] for v in model._static_vars]]), vals
 
 
 # --------------------------------------------------------------------------- #
@@ -198,11 +222,13 @@ def predict_point(lat: float, lon: float, start, end=None, model=None,
     silo = _silo_series(q)
     if verbose:
         print("  SLGA soil + terrain ...", flush=True)
-    statics, awc = _statics_at_point(q, lon, lat, model, silo)
+    statics, vals = _statics_at_point(q, lon, lat, model, silo)
 
     storage = _simulate(silo[[_RAIN]].to_numpy(), silo[[_PET]].to_numpy(), model,
-                        cap_ratio=_cap_ratio(model, [awc]))
-    vwc = model.readout(storage[:, 0], np.repeat(statics, len(silo), axis=0))
+                        cap_ratio=_cap_ratio(model, [vals["soil_awc"]]))
+    lim = _pedo_limits(model, vals["soil_clay"], vals["soil_sand"])
+    vwc = model.readout(storage[:, 0], np.repeat(statics, len(silo), axis=0),
+                        limits=lim)
 
     out = pd.DataFrame({"time": silo.index, "sm_pred": vwc,
                         "storage_mm": storage[:, 0]})
@@ -311,10 +337,19 @@ def predict_map(bbox, day, model=None, model_name: str = "model8",
     S = np.column_stack(stat_cols)
     stor = fine.values.ravel()
 
+    # Pedotransfer limits per pixel (model9); None for the 5-param fits.
+    clay = (soil["soil_clay"].rio.reproject_match(grid, resampling=Resampling.nearest)
+            .values.ravel())
+    sand = (soil["soil_sand"].rio.reproject_match(grid, resampling=Resampling.nearest)
+            .values.ravel())
+    lim = _pedo_limits(model, clay, sand)
+
     valid = np.isfinite(S).all(axis=1) & np.isfinite(stor)
     pred = np.full(stor.shape, np.nan, dtype="float32")
     if valid.any():
-        pred[valid] = model.readout(stor[valid], S[valid]).astype("float32")
+        lim_v = None if lim is None else (lim[0][valid], lim[1][valid])
+        pred[valid] = model.readout(stor[valid], S[valid],
+                                    limits=lim_v).astype("float32")
     if verbose:
         print(f"  predicted {int(valid.sum()):,} pixels, mean "
               f"{np.nanmean(pred):.1f}%", flush=True)
