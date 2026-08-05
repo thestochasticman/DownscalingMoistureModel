@@ -49,14 +49,15 @@ then apply it. Each item links to a self-contained page.
 | 13 | [model6 · Antecedent meteorology](modules/model6.md) | **Recommended** — model4 + weather (pooled NSE +0.38) |
 | 14 | [model7 · Process model](modules/model7.md) | The process track's foundation: bucket water balance, no ML (median station r 0.83) |
 | 15 | [model8 · Process model + SLGA soil](modules/model8.md) | **Recommended process model** — pooled NSE +0.40, median station NSE +0.22 |
+| 16 | [Blocked validation](modules/blocked_validation.md) | Leave-one-**block**-out transfer skill for model6 & model8 — the honest numbers for a national product |
 
 **3 · Applying the model**
 
 | # | Page | Output |
 |---|---|---|
-| 16 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
-| 17 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
-| 18 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
+| 17 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
+| 18 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
+| 19 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
 
 ## The model
 
@@ -98,6 +99,15 @@ per-station r 0.81) but a per-station *level* bias remains — it is **not** a
 solved product. An earlier version of this handout reported inflated skill from a
 look-ahead leak in the SMIPS-climatology features; see
 [Evaluation correction](#evaluation-correction).
+
+**And read every station-out figure as an interpolation estimate.** 26 of the
+37 stations sit in two tight clusters whose members share ~5 km forcing cells,
+so holding out one station leaves its near-neighbours in training. Holding out
+whole **spatially independent blocks** instead (9 folds) drops model8 to pooled
+**≈+0.29** (with its climate fix) and model6's block-median to +0.09, with the
+failures concentrated at the climate-envelope edges — the honest transfer
+numbers for a national product are on the
+[blocked-validation page](modules/blocked_validation.md).
 
 How this model was arrived at is documented across the model pages
 ([model1](modules/model1.md) → [model6](modules/model6.md)); the 30 m product it

@@ -1,7 +1,7 @@
 # `model8`: model7 + SLGA soil — the process model at ML parity
 
 <!-- NAV -->
-[← model7 · Process model](model7.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model7 · Process model](model7.md) · [Index](../README.md) · [Blocked validation →](blocked_validation.md)
 <!-- /NAV -->
 
 Source: [`../../emt/model8/model.py`](../../emt/model8/model.py)
@@ -143,6 +143,22 @@ PYTHONPATH=. python -m emt.model7.build     # target + forcing + terrain + soil
 PYTHONPATH=. python -m emt.model8.model data/process_target_2006_2010.csv
 ```
 
+## Spatial transfer — read the headline with the blocked numbers
+
+The table above is **leave-one-station-out**, which leaves a held-out
+station's cluster neighbours (same ~5 km forcing cells, same soil map units)
+in training — an *interpolation* estimate. Holding out whole spatially
+independent blocks instead (9 folds: Yanco, Kyeamba, Adelong, each M-site)
+drops model8 to **pooled +0.22, station-median −0.18**: much of the
+between-site level skill above is neighbour leakage. Two cheap, monotone fixes
+recover part of it — an **aridity static** in the offset stage (climate was
+the one thing the level model couldn't see) and **stratified sample weights**
+— for a blocked **pooled +0.29, block-median +0.27, 7/9 blocks positive,
+station-median −0.01**. What remains fails at the climate-envelope *edges*
+(the driest station, the wettest cluster) as pure level error with r intact —
+a data limitation, not a modelling one. Full experiment, per-block tables and
+figure: [Blocked validation](blocked_validation.md).
+
 ## Status
 
 model8 is the **recommended model of the process track** ([model7](model7.md)
@@ -150,11 +166,14 @@ stays as its covariate-free foundation) and a full peer of
 [model6](model6.md): pooled parity, better per-station medians, 13
 interpretable parameters, no training table, and no dependence on SMIPS at
 all. Its caveats are the shared ones — no temporal hold-out, no validation
-outside the Murrumbidgee. The two tracks fail differently, which is what makes
+outside the Murrumbidgee — plus the spatial-transfer picture above: the
+station-out skill is the interpolation figure, the
+[blocked](blocked_validation.md) +0.29 the transfer figure. The two tracks
+fail differently (see the blocked page's per-block table), which is what makes
 the hybrid flagged in model7 (bucket storage as an ML feature, or SMIPS
 assimilated into the bucket) the natural next step.
 
 ---
 <!-- NAV -->
-[← model7 · Process model](model7.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model7 · Process model](model7.md) · [Index](../README.md) · [Blocked validation →](blocked_validation.md)
 <!-- /NAV -->

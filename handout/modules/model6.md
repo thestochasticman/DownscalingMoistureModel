@@ -107,11 +107,26 @@ the leave-site-out table above, and the shipped inference tool is
 
 ![model6 downscaled 30 m field over Yanco](../figures/downscale_yanco_model6.png)
 
+## Spatial transfer — the blocked view
+
+The table above is leave-one-station-out, which keeps a held-out station's
+cluster neighbours in training. Under **leave-one-block-out** (9 spatially
+independent blocks) model6's pooled NSE barely moves (+0.36 — the two big
+clusters cover for each other) but its **block-median is only +0.09** with
+collapses at M2 (bias +6.7 %) and M7 — while [model8](model8.md) holds a
+block-median of +0.27 on the same folds. The GBM is the better interpolator,
+the bucket the better transferrer, and they fail at *different* blocks; the
+per-block comparison is on the
+[blocked-validation page](blocked_validation.md). (Stratified sample weights,
+which help model8 there, *hurt* model6 — block-median +0.09 → −0.14 — and are
+not adopted for it.)
+
 ## Status
 
 model6 is the **recommended** model — it beats [`model4`](model4.md) on every
 leave-site-out metric on the 36-station set. It is not a finished product: the
-per-station level bias persists (see the README). The trained estimator ships in
+per-station level bias persists (see the README), and its spatial-transfer
+skill is materially lower than its station-out numbers (see above). The trained estimator ships in
 the repo (`data/models/model6.joblib`) and is applied to any AOI/day by
 [`emt/predict.py`](../../emt/predict.py) — `python -m emt.predict --bbox W S E N
 --date YYYY-MM-DD` — which fetches the SMIPS lookback, soil and SILO antecedent

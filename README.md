@@ -154,8 +154,14 @@ Recommended model **`model6`**, 36-station leave-site-out, 2006–2010:
 
 The model tracks moisture **dynamics** well (median per-station r 0.81) but carries
 a per-station **level** bias (median per-station NSE −0.19) — it is a working
-model, **not** a finished product. The full story, including an earlier
-evaluation leak that was found and corrected, is in the
+model, **not** a finished product. These are also *station-out* figures, i.e.
+interpolation next to instrumented sites; under **blocked validation** (whole
+spatially independent site-groups held out — the honest test for a national
+product) model8 transfers at pooled NSE ≈ +0.29 and model6's block-median falls
+to +0.09, with failures concentrated at the edges of the training climate range
+(see
+[blocked validation](handout/modules/blocked_validation.md)). The full story,
+including an earlier evaluation leak that was found and corrected, is in the
 [handout](handout/README.md).
 
 ![model6 leave-site-out results](handout/figures/model6_results.png)
