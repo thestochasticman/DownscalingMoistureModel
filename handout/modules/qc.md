@@ -119,9 +119,48 @@ window everywhere, and the gain grows with the strictness of the test:
 
 | harness | legacy 2006–2010 | extended 2002–2013 | station-median (legacy → ext) |
 |---|---|---|---|
-| station-out (interpolation) | +0.408 | **+0.431** | +0.13 → **+0.199** |
-| blocked (transfer) | +0.322 | +0.316 | +0.07 → **+0.160** |
-| **block × year** (worst case) | +0.273 | **+0.304** | −0.01 → **+0.151** |
+| station-out (interpolation) | +0.408 | **+0.431** | +0.13 → +0.199 |
+| blocked (transfer) | +0.322 | +0.316 | +0.07 → +0.160 |
+| **block × year** (worst case) | +0.273 | **+0.304** | −0.01 → +0.151 |
+
+> **Read the station-median column with care.** Each row scores the two models
+> on *their own* periods — 5 years against 12 — so those figures confound the
+> model with the sample. The like-for-like comparison is below, and it does
+> not say the same thing.
+
+### Like-for-like: same observations, both models
+
+Scoring both station-out runs on the **50,608 station-days they both predict**
+(inner join on station and time; target values are bit-identical across the
+two files) isolates the training record as the only difference:
+
+| matched subset | legacy | refit | |
+|---|---|---|---|
+| pooled NSE | +0.410 | **+0.426** | |
+| r | 0.64 | **0.66** | |
+| ubRMSE | 6.01 | **5.90** | |
+| bias | **−0.15** | +0.60 | refit runs wetter |
+| **median station NSE** | **+0.130** | +0.042 | **refit is worse** |
+| stations improved | — | 17 / 37 | |
+
+**The refit is better in aggregate and worse per station.** Pooled skill,
+correlation and ubRMSE all improve, but the median *station* loses skill and
+barely half the stations gain. The naive +0.199 figure in the table above was
+a property of the larger sample, not of the model.
+
+That is a real trade, not a defect: the legacy model is specialised to the
+five years it was fitted on, and the refit gives up some of that in-period
+per-site sharpness for a calibration that holds across regimes. The evidence
+for the other side of the trade is the block × year collapse — 0.049 for the
+legacy model against **0.012** for the refit. Which matters depends on the
+use: a national product over unseen years and districts wants the refit; a
+2006–2010 Murrumbidgee reanalysis is better served by the legacy fit.
+
+![Station-out comparison](../figures/station_out_comparison.png)
+
+Six stations fall below the panel's −2 clip and are annotated with their true
+values rather than dropped — K12 is catastrophic in both (−14.6 → −13.8) and
+Y7, M7 and K2 degrade further under the refit.
 
 The number that matters is the **collapse from blocked to block × year**: the
 legacy model loses 0.049 NSE when the test year is also withheld, the extended
