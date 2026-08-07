@@ -92,14 +92,23 @@ def _local_path(url: str, out_dir: Path) -> Path:
 
 
 def download_file(url: str, out_dir: Path = OZNET_DIR, timeout: int = 120) -> Path:
-    """Download a single OzNet .xls, skipping if already cached. Returns the path."""
+    """Download a single OzNet .xls, skipping if already cached. Returns the path.
+
+    Written to a temporary file and renamed into place, because the cache-hit
+    test is "exists and non-empty": a process killed mid-write would otherwise
+    leave a truncated file that looks cached forever and is never refetched.
+    That happened -- two of 2,192 files, one at 16 KB against a 2.5 MB median --
+    and it surfaced only as an ``IndexError`` deep inside xlrd's OLE2 reader.
+    """
     dest = _local_path(url, out_dir)
     if dest.exists() and dest.stat().st_size > 0:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     r = requests.get(url, timeout=timeout)
     r.raise_for_status()
-    dest.write_bytes(r.content)
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    tmp.write_bytes(r.content)
+    tmp.replace(dest)                      # atomic on the same filesystem
     return dest
 
 
@@ -248,8 +257,16 @@ def parse_xls(path: str | Path) -> pd.DataFrame:
 
 
 def _station_daily_rootzone(path: str | Path) -> pd.DataFrame | None:
-    """Daily root-zone (0-90 cm) mean soil moisture from one file, or None."""
-    df = parse_xls(path)
+    """Daily root-zone (0-90 cm) mean soil moisture from one file, or None.
+
+    Returns None rather than raising if the workbook cannot be read: a single
+    corrupt or truncated file must not abort a build over two thousand of them.
+    """
+    try:
+        df = parse_xls(path)
+    except Exception as e:                                     # noqa: BLE001
+        print(f"  UNREADABLE {path}: {type(e).__name__}: {e}", flush=True)
+        return None
     if df.empty:
         return None
     have = [c for c in ROOTZONE_LAYERS if c in df.columns]
