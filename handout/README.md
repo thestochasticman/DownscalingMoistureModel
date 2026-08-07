@@ -53,14 +53,15 @@ then apply it. Each item links to a self-contained page.
 | 17 | [model9 · Pedotransfer readout](modules/model9.md) | Per-site soil hydraulic limits replace two global readout constants — best blocked transfer (+0.35), narrow gain |
 | 18 | [Temporal validation](modules/temporal_validation.md) | Leave-one-**year**-out across the drought break — time is the easy axis, space is the hard one |
 | 19 | [model10 · The hybrid](modules/model10.md) | Bucket storage as an ML feature — a negative result, with one instructive exception |
+| 20 | [In-situ networks](modules/insitu_networks.md) | The loader contract, the survey of more data, and what is blocking it |
 
 **3 · Applying the model**
 
 | # | Page | Output |
 |---|---|---|
-| 20 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
-| 21 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
-| 22 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
+| 21 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
+| 22 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
+| 23 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
 
 ## The model
 

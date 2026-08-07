@@ -1,7 +1,7 @@
 # `model10`: the hybrid — a negative result, with one instructive exception
 
 <!-- NAV -->
-[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [In-situ networks →](insitu_networks.md)
 <!-- /NAV -->
 
 Source: [`../../emt/model10/model.py`](../../emt/model10/model.py)
@@ -75,5 +75,5 @@ PYTHONPATH=. python handout/run_blocked_cv.py m10 m10@blockyear
 
 ---
 <!-- NAV -->
-[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [In-situ networks →](insitu_networks.md)
 <!-- /NAV -->
