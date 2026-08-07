@@ -70,6 +70,18 @@ WARNING = ("NOTE: model8 is calibrated on the Murrumbidgee catchment; prediction
            "elsewhere are plausible but UNVALIDATED. Treat as indicative.")
 
 SPINUP_YEARS = 2          # ~4x the 6-month convergence point (see the docstring)
+
+# Reference climatology for the aridity static. The aridity normal is a
+# property of the WINDOW it is computed over, not of the site: recomputed over
+# 2000-2025 rather than 2005-2010 the OzNet normals move by up to 0.63 sd, and
+# the window predict.py used to use (spin-up start -> requested end, ~3 years)
+# differs from the training window by up to 1.11 sd. At the fitted +0.61 %VWC
+# per sd that is ~0.7 percentage points of level, arising purely from which
+# years happened to be fetched. Pinning a fixed reference period makes the
+# static a property of the place, so the same site gets the same climate
+# regardless of which date is being predicted.
+ARIDITY_REF_START = _date(2000, 1, 1)
+ARIDITY_REF_END = _date(2025, 12, 31)
 GRID_STEP_DEG = 0.1       # forcing-grid spacing for maps (SILO's native is 0.05)
 
 _RAIN, _PET = "daily_rain", "et_morton_potential"
@@ -143,20 +155,32 @@ def _simulate(rain: np.ndarray, pet: np.ndarray, model,
 
 
 def _aridity(silo: pd.DataFrame) -> float:
-    """Aridity normal (mean P / mean PET) over a fetched SILO series.
+    """Aridity normal (mean P / mean PET) over whatever series is passed.
 
-    Training used the 2005-2010 forcing; at inference the normal is estimated
-    over the fetched window (spin-up start -> end, >= 2 calendar years). P/PET
-    is a stable ratio, so the window difference moves the static by well under
-    one training standard deviation.
-
-    One consequence worth knowing: because the window depends on the requested
-    period, the *same* day predicted with a different ``--end`` gets a very
-    slightly different aridity static, hence a slightly different level. The
-    effect is tiny (measured ~0.001 % VWC between a 3-day and a 5-day request,
-    with storage bit-identical) but it is not exactly zero.
+    Prefer :func:`aridity_at`, which fetches the fixed reference period. This
+    helper is the arithmetic only and is kept because a caller that already
+    holds the reference series should not refetch it.
     """
     return float(silo[_RAIN].mean() / silo[_PET].mean())
+
+
+def aridity_at(lat: float, lon: float, buffer_km: float = 1.5,
+               verbose: bool = False) -> float:
+    """Aridity normal for a location over the FIXED reference period.
+
+    Fetched under its own Query stub so it is computed once per location and
+    cached, independent of which date is being predicted. See
+    ``ARIDITY_REF_START``/``ARIDITY_REF_END`` for why this is pinned rather
+    than taken from the prediction window.
+    """
+    q = Query.from_lat_lon(lat=lat, lon=lon, buffer_km=buffer_km,
+                           start=ARIDITY_REF_START, end=ARIDITY_REF_END,
+                           stub=_tag("arid", f"{lat:.4f}", f"{lon:.4f}",
+                                     ARIDITY_REF_START, ARIDITY_REF_END))
+    if verbose:
+        print(f"  aridity reference {ARIDITY_REF_START} -> {ARIDITY_REF_END} ...",
+              flush=True)
+    return _aridity(_silo_series(q))
 
 
 def _pedo_limits(model, clay, sand):
@@ -190,7 +214,8 @@ def _statics_at_point(q: Query, lon: float, lat: float, model,
     src = {**{v: soil[v] for v in SOIL_VARS},
            **{v: terr[v] for v in TERRAIN_STATIC_VARS}}
     vals = {v: float(sample_points(src[v], lon, lat).values) for v in src}
-    vals["aridity"] = _aridity(silo)
+    vals["aridity"] = (aridity_at(lat, lon) if "aridity" in model._static_vars
+                       else float("nan"))
     return np.array([[vals[v] for v in model._static_vars]]), vals
 
 
@@ -272,7 +297,11 @@ def _forcing_grid(bbox, sim_start: _date, day: _date, step_deg: float,
             cols.append(s.reindex(times))
     rain = np.column_stack([c[_RAIN].to_numpy() for c in cols])
     pet = np.column_stack([c[_PET].to_numpy() for c in cols])
-    aridity = np.array([_aridity(c) for c in cols])
+    # Aridity comes from the FIXED reference period, not this window -- one
+    # extra cached fetch per cell, so the climate static is a property of the
+    # place rather than of the date requested.
+    aridity = np.array([aridity_at(float(la), float(lo))
+                        for la in lats for lo in lons])
     return rain, pet, aridity, lons, lats
 
 
