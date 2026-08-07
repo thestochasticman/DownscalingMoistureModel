@@ -1,7 +1,7 @@
 # In-situ networks — the contract, and where more data would come from
 
 <!-- NAV -->
-[← model10 · The hybrid](model10.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model10 · The hybrid](model10.md) · [Index](../README.md) · [Data quality →](qc.md)
 <!-- /NAV -->
 
 Source: [`../../emt/insitu/base.py`](../../emt/insitu/base.py) ·
@@ -140,5 +140,5 @@ checked *before* any parser is written, which is the lesson CosmOZ taught.
 
 ---
 <!-- NAV -->
-[← model10 · The hybrid](model10.md) · [Index](../README.md) · [Downscaling to 30 m →](downscale.py.md)
+[← model10 · The hybrid](model10.md) · [Index](../README.md) · [Data quality →](qc.md)
 <!-- /NAV -->

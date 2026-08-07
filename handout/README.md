@@ -54,6 +54,7 @@ then apply it. Each item links to a self-contained page.
 | 18 | [Temporal validation](modules/temporal_validation.md) | Leave-one-**year**-out across the drought break — time is the easy axis, space is the hard one |
 | 19 | [model10 · The hybrid](modules/model10.md) | Bucket storage as an ML feature — a negative result, with one instructive exception |
 | 20 | [In-situ networks](modules/insitu_networks.md) | The loader contract, the survey of more data, and what is blocking it |
+| 21 | [Data quality](modules/qc.md) | Sentinels, two rejected detectors, and the calibration drift that bounds the record |
 
 **3 · Applying the model**
 
