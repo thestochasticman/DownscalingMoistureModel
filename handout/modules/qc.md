@@ -209,6 +209,59 @@ PYTHONPATH=. python handout/validate_qc.py
 PYTHONPATH=. python handout/run_extended_cv.py block --years=2002-2013
 ```
 
+## 6. What the residual error actually is
+
+The station-out comparison left six stations below −2 NSE under every
+configuration from model7 to model10, K12 at −14.6. The natural reading is
+that the model fails there. It does not — **those stations carry the lowest
+absolute errors in the network.** A4 has the best ubRMSE of all 37 (0.91 pp)
+at NSE −2.08; the six worst-NSE stations have a median ubRMSE of 1.86 against
+2.62 for everyone else.
+
+NSE is variance-normalised and charges the full cost of a constant offset, so
+splitting MSE into its two parts separates the two failures:
+
+    MSE = bias² + ubRMSE²
+          level   dynamics
+
+![Error decomposition](../figures/error_decomposition.png)
+
+| | |
+|---|---|
+| median share of MSE that is pure **level** | **52 %** |
+| stations where level is >80 % of MSE | 10 / 37 |
+| median station correlation r (**dynamics**) | **0.82** |
+| stations with r > 0.5 but NSE < 0 | **16** |
+
+**The process model has largely solved the dynamics and is failing on level.**
+It tracks the shape of the wetting and drying curve at r = 0.82 across the
+network, and then places that curve at the wrong absolute height.
+
+Removing each station's mean offset — an **oracle**, using held-out truth, so
+an upper bound and not an achievable result — gives:
+
+| | as fitted | level solved |
+|---|---|---|
+| median station NSE | +0.130 | **+0.613** |
+| stations NSE > 0 | 20 / 37 | **36 / 37** |
+| K12 | −14.57 | **+0.41** |
+
+That is the whole remaining headroom of the project, and it sits in one place.
+Every configuration from model7 to model10 has been an attempt at this level
+problem through the ridge offset stage — soil, terrain, aridity, pedotransfer
+limits, AWC capacity — and each bought a few hundredths. The decomposition
+explains why the gains were small and where a large one would have to come
+from.
+
+The implication for direction: further work on the water balance is
+mis-targeted. The lever is **anchoring the absolute level**, and the route
+already identified in [`downscale.py`](downscale.py.md#future-work-mass-conservation)
+— rebasing the predicted cell mean onto an *observed* coarse soil-moisture
+field in % (SMAP L4 or ASCAT, both national and public) while keeping the fine
+terrain structure — attacks exactly this term, using satellite data rather
+than more in-situ calibration. Untested, and the single highest-value
+experiment available.
+
 ## Open
 
 Recovering 2014–2025 needs the discontinuities corrected, not filtered. The
