@@ -19,6 +19,7 @@ Run::  PYTHONPATH=. python -m emt.build_dataset            # full 36-station tab
 from __future__ import annotations
 
 from datetime import date
+import re
 import sys
 
 import pandas as pd
@@ -33,6 +34,29 @@ from emt.slga import SOIL_VARS
 # OzNet station-prefix -> site (the leave-region-out grouping).
 SITE_OF_PREFIX = {"A": "ADELONG", "K": "KYEAMBA", "Y": "YANCO", "M": "MURRUMBIDGEE"}
 
+# Only the CORE PROFILE stations belong in the 0-90 cm root-zone target: a
+# letter followed by digits (Y1-Y13, K1-K14, A1-A5, M1-M7).
+#
+# The archive also carries the Yanco SMAP focus grid -- 24 stations named YA*
+# and YB*, installed 2009 on a 3 km/9 km lattice. Those are SURFACE ONLY
+# (0-5 cm) and must never become root-zone training rows: a shallow sensor
+# dries faster than a profile mean, so the model would be fitted against a
+# reference that is systematically drier than what it predicts. Y3, the one
+# core station whose target is a single layer rather than three, shows the
+# signature -- blocked bias +4.27 %, the model reading too wet.
+#
+# Until now they were excluded only INCIDENTALLY: no coordinate page exists
+# for them, so build_target dropped them for want of lat/lon. That is not a
+# decision, it is an accident of the scraper, and it would reverse the moment
+# a coordinate source appeared (they are published in the SMAPEx literature).
+# Note "YA1"[:1] == "Y", so the prefix map alone would file them under YANCO.
+CORE_STATION_RE = re.compile(r"^[YKAM]\d+$")
+
+
+def is_core_profile_station(station: str) -> bool:
+    """True for the 0-90 cm profile stations, False for the surface grid."""
+    return bool(CORE_STATION_RE.match(str(station).upper()))
+
 DEFAULT_OUT = "data/train_catchment_plus_m_2006_2010.csv"
 DEFAULT_START, DEFAULT_END = date(2006, 1, 1), date(2010, 12, 31)
 
@@ -45,6 +69,13 @@ FINAL_COLS = (["site", "station", "time", "lat", "lon", "sm_rootzone_pct", SMIPS
 
 
 def site_of(station: str) -> str | None:
+    """Site label for a core profile station; ``None`` for anything else.
+
+    Returning None for the surface grid is what keeps it out of the target --
+    every builder drops rows with a null site.
+    """
+    if not is_core_profile_station(station):
+        return None
     return SITE_OF_PREFIX.get(str(station)[:1].upper())
 
 
