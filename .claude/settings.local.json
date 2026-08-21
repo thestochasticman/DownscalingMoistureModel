@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": [
+      "Bash",
+      "Bash(python3 -c \"import numba; print\\('numba', numba.__version__\\)\")",
+      "Bash(python3 -c \"import scipy; print\\('scipy', scipy.__version__\\)\")",
+      "Bash(touch /workspace/DownscalingMoistureModel/emt/model7/__init__.py)",
+      "Bash(mkdir -p /workspace/DownscalingMoistureModel/emt/model7)",
+      "Bash(python3 /tmp/claude-0/-workspace-DownscalingMoistureModel/aa95395a-260f-4431-a668-a0c9adfe9af5/scratchpad/fetch_terrain_statics.py)",
+      "Bash(python3 *)",
+      "Bash(PYTHONPATH=. python3 *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(conda env *)",
+      "Read(//opt/conda/**)",
+      "Read(//workspace/paddock-ts-local/**)",
+      "Bash(python /tmp/claude-0/-workspace-DownscalingMoistureModel/84ec1765-7145-45bf-a9b7-1821ed763972/scratchpad/topup_smips.py)",
+      "Bash(python -m emt.model8.predict --bbox 147.45 -35.10 147.55 -35.00 --date 2025-06-01 --no-plot)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(sudo -n true)",
+      "Bash(python -c ' *)",
+      "Skill(loop)"
+    ]
+  }
+}
