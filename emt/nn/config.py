@@ -20,12 +20,33 @@ MODEL6_FEATURES = (
 )
 
 
+#: Heavy-tailed features (skew > ~1.5, max/median in the hundreds) that get a
+#: log1p before standardisation so a net is not fitting a handful of +5-sigma rows.
+LOG1P_FEATURES = ("accumulation", "rain_7", "rain_30", "rain_365", "slope")
+
+#: Features that take exactly one value per station: terrain + soil. They are a
+#: 37-row lookup table, not 50k samples -- the channel through which a net
+#: memorises station identity. They get their own branch and their own noise.
+STATIC_FEATURES = ("elevation", "slope", "northness", "eastness", "twi", "hli", "accumulation",
+                   "soil_clay", "soil_sand", "soil_awc", "soil_bdw")
+
+
 @dataclass(frozen=True)
 class DataConfig:
     features: tuple[str, ...] = MODEL6_FEATURES
     target: str = TARGET
     group: str = GROUP
     time: str = TIME
+    log1p: tuple[str, ...] = LOG1P_FEATURES       # () disables
+    static: tuple[str, ...] = STATIC_FEATURES     # () = treat everything as dynamic
+
+    @property
+    def log_idx(self) -> tuple[int, ...]:
+        return tuple(i for i, f in enumerate(self.features) if f in self.log1p)
+
+    @property
+    def static_idx(self) -> tuple[int, ...]:
+        return tuple(i for i, f in enumerate(self.features) if f in self.static)
 
 
 @dataclass(frozen=True)
@@ -33,6 +54,8 @@ class MLPConfig:
     hidden: tuple[int, ...] = (256, 256, 128)
     dropout: float = 0.15
     residual: bool = True
+    static_bottleneck: int = 0      # >0: statics pass through a Linear->SiLU->Dropout of this width
+    static_dropout: float = 0.3     # dropout inside the static branch
 
 
 @dataclass(frozen=True)
@@ -46,7 +69,8 @@ class TrainConfig:
     batch_size: int = 1024
     warmup_frac: float = 0.1
     clip_grad: float | None = 1.0
-    input_noise: float = 0.05    # Gaussian noise on standardised inputs
+    input_noise: float = 0.05    # Gaussian noise on standardised DYNAMIC inputs
+    static_noise: float = 0.3    # Gaussian noise on standardised STATIC inputs (blur the station fingerprint)
     val_frac: float = 0.15       # fraction of STATIONS held out for early stopping; 0 = off
     patience: int = 20
     n_ensemble: int = 3

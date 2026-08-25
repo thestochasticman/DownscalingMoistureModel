@@ -16,16 +16,27 @@ from emt.nn.config import DataConfig
 
 @dataclass(frozen=True)
 class Scaler:
+    """log1p on the chosen columns, then z-score; target z-scored."""
     x_mean: np.ndarray
     x_std: np.ndarray
     y_mean: float
     y_std: float
+    log_idx: tuple[int, ...] = ()
 
     @classmethod
-    def fit(cls, X: np.ndarray, y: np.ndarray) -> "Scaler":
-        return cls(X.mean(0), X.std(0) + 1e-6, float(y.mean()), float(y.std() + 1e-6))
+    def fit(cls, X: np.ndarray, y: np.ndarray, log_idx: tuple[int, ...] = ()) -> "Scaler":
+        Xl = cls._log(X, log_idx)
+        return cls(Xl.mean(0), Xl.std(0) + 1e-6, float(y.mean()), float(y.std() + 1e-6), log_idx)
 
-    def x(self, X): return (X - self.x_mean) / self.x_std
+    @staticmethod
+    def _log(X, idx):
+        if not idx:
+            return X
+        X = X.copy()
+        X[:, list(idx)] = np.log1p(np.clip(X[:, list(idx)], 0, None))
+        return X
+
+    def x(self, X): return (self._log(X, self.log_idx) - self.x_mean) / self.x_std
     def y(self, y): return (y - self.y_mean) / self.y_std
     def y_inv(self, ys): return ys * self.y_std + self.y_mean
 

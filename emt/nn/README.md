@@ -38,6 +38,26 @@ m.predict(df_new)            # NaN in → NaN out
 m.save("data/models/nn_mlp.pt"); MLPModel.load("data/models/nn_mlp.pt")
 ```
 
+## Preprocessing
+
+`Scaler` does `log1p` on the heavy-tailed columns (`accumulation`, `rain_7`,
+`rain_30`, `rain_365`, `slope` — skew 1.5–4, max/median in the hundreds), then
+z-scores everything; the target is z-scored too. All statistics come from the
+training rows of the fold.
+
+Eleven of the 25 features (terrain + soil) are **constant within a station** —
+a 37-row lookup table through which the net can read station identity and
+memorise the station mean. Three levers address that, all off by default except
+a small static noise:
+
+| lever | where | effect |
+|---|---|---|
+| `TrainConfig.static_noise` | noise on the static columns only (dynamic columns use `input_noise`) | blurs the station fingerprint |
+| `MLPConfig.static_bottleneck` | statics enter via `Linear→SiLU→Dropout(static_dropout)` of this width | limits how much identity can pass |
+| `DataConfig.static = ()` | disables both | control |
+
+CLI: `--static_noise 0.3 --static_bottleneck 4`, `--no-log1p`, `--no-static`.
+
 ## The loss question
 
 Pooled NSE = 1 − SSE/SST, and SST is a constant of the training set, so

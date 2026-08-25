@@ -41,6 +41,11 @@ class Trainer:
             seed: int) -> list[dict]:
         cfg = self.cfg
         torch.manual_seed(seed)
+        # per-column noise scale: statics get cfg.static_noise, the rest cfg.input_noise
+        noise = torch.full((train.X.shape[1],), cfg.input_noise, device=self.device)
+        if train.cfg.static_idx:
+            noise[list(train.cfg.static_idx)] = cfg.static_noise
+        use_noise = bool((noise > 0).any())
         net = net.to(self.device)
         Xtr, ytr, wtr, str_ = self._tensors(train)
         Xva, yva = self._tensors(val)[:2] if val is not None and len(val) else (None, None)
@@ -63,8 +68,8 @@ class Trainer:
             for i in range(steps):
                 idx = perm[i * cfg.batch_size:(i + 1) * cfg.batch_size]
                 xb = Xtr[idx]
-                if cfg.input_noise > 0:
-                    xb = xb + cfg.input_noise * torch.randn_like(xb)
+                if use_noise:
+                    xb = xb + noise * torch.randn_like(xb)
                 with autocast():
                     pred = net(xb)
                 loss = self.loss_fn(pred.float(), ytr[idx], wtr[idx], str_[idx],

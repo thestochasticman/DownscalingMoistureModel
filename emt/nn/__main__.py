@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 from emt.nn import cv
-from emt.nn.config import MLPConfig, TrainConfig
+from emt.nn.config import DataConfig, MLPConfig, TrainConfig
 from emt.nn.model import MLPModel
 
 DEFAULT_TABLE = "data/model6_features_2006_2010.csv"
@@ -56,21 +56,28 @@ def main() -> None:
     ap.add_argument("--out", default=None, help="cv: predictions CSV; fit: model .pt")
     ap.add_argument("-v", "--verbose", action="store_true")
     ap.add_argument("--workers", type=int, default=1, help="cv: parallel folds on the GPU")
+    ap.add_argument("--no-log1p", action="store_true", help="disable the log1p transforms")
+    ap.add_argument("--no-static", action="store_true",
+                    help="treat every feature as dynamic (no static branch / static noise)")
+    ap.add_argument("--tag", default=None, help="name for the output files")
     add_config_args(ap)
     a = ap.parse_args()
     mlp, train = configs(a)
+    data = DataConfig(log1p=() if a.no_log1p else DataConfig.log1p,
+                      static=() if a.no_static else DataConfig.static)
     df = pd.read_csv(a.table, parse_dates=["time"])
     print(f"table {a.table}: {len(df)} rows, {df['station'].nunique()} stations")
-    print(f"mlp   {mlp}\ntrain {train}")
+    print(f"data  log1p={data.log1p} static={len(data.static)} cols\nmlp   {mlp}\ntrain {train}")
 
     if a.cmd == "cv":
-        out = cv.run(df, a.design, mlp=mlp, train=train, workers=a.workers, verbose=True)
-        cv.print_summary(f"nn-mlp[{train.loss}] @{a.design}", out)
-        path = a.out or f"data/nn_mlp_{train.loss}_{a.design}cv_predictions.csv"
+        out = cv.run(df, a.design, data=data, mlp=mlp, train=train, workers=a.workers, verbose=True)
+        tag = a.tag or f"nn_mlp_{train.loss}"
+        cv.print_summary(f"{tag} @{a.design}", out)
+        path = a.out or f"data/{tag}_{a.design}cv_predictions.csv"
         out.to_csv(path, index=False)
         print(f"wrote {path}")
     else:
-        model = MLPModel(mlp=mlp, train=train, verbose=a.verbose).fit(df)
+        model = MLPModel(data, mlp, train, verbose=a.verbose).fit(df)
         path = model.save(a.out or "data/models/nn_mlp.pt")
         best = [max(r.get("val_nse", float("nan")) for r in h) for h in model.history]
         print(f"saved {path}; member best val NSE {['%.3f' % b for b in best]}")

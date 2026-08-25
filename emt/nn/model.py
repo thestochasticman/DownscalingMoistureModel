@@ -30,13 +30,13 @@ class MLPModel:
         return self.fit_data(TabularData.from_frame(df, self.data, weight))
 
     def fit_data(self, d: TabularData) -> "MLPModel":
-        self.scaler = Scaler.fit(d.X, d.y)
+        self.scaler = Scaler.fit(d.X, d.y, self.data.log_idx)
         trainer = Trainer(self.train_cfg, self.scaler, self.verbose)
         self.nets, self.history = [], []
         for k in range(self.train_cfg.n_ensemble):
             seed = self.train_cfg.seed + 1000 * k
             tr, va = d.grouped_split(self.train_cfg.val_frac, np.random.default_rng(seed))
-            net = ResidualMLP(d.X.shape[1], self.mlp)
+            net = ResidualMLP(d.X.shape[1], self.mlp, self.data.static_idx)
             if self.verbose:
                 print(f"[member {k + 1}/{self.train_cfg.n_ensemble}] "
                       f"train {tr.sum()} rows / val {va.sum()} rows", flush=True)
@@ -69,7 +69,7 @@ class MLPModel:
         m = cls(ck["data"], ck["mlp"], ck["train"])
         m.scaler, m.history = ck["scaler"], ck["history"]
         for sd in ck["state_dicts"]:
-            net = ResidualMLP(len(m.data.features), m.mlp)
+            net = ResidualMLP(len(m.data.features), m.mlp, m.data.static_idx)
             net.load_state_dict(sd)
             m.nets.append(net)
         return m
