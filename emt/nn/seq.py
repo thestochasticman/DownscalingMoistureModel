@@ -290,6 +290,7 @@ class SeqModel:
 # --------------------------------------------------------------------------- #
 def main() -> None:
     import argparse
+    import functools
     from emt.nn import cv
     from emt.nn.__main__ import add_config_args, config_from_args
 
@@ -316,7 +317,7 @@ def main() -> None:
     print(f"net   {net}\ntrain {train}")
     tag = a.tag or f"nn_seq_{train.loss}"
     if a.cmd == "cv":
-        out = cv.run_dataset(d, lambda: SeqModel(dcfg, net, train), a.design, a.workers, True)
+        out = cv.run_dataset(d, functools.partial(SeqModel, dcfg, net, train), a.design, a.workers, True)
         cv.print_summary(f"{tag} @{a.design}", out)
         path = a.out or f"data/{tag}_{a.design}cv_predictions.csv"
         out.to_csv(path, index=False)

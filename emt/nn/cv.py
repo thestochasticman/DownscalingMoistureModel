@@ -12,6 +12,8 @@ Four fold designs of increasing strictness, the same ones the handout uses:
 """
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 import pandas as pd
 
@@ -92,7 +94,7 @@ def run(df: pd.DataFrame, design: str = "station", data: DataConfig = DataConfig
         weight: np.ndarray | None = None, workers: int = 1, verbose: bool = True) -> pd.DataFrame:
     """The tabular MLP on the ladder."""
     return run_dataset(TabularData.from_frame(df, data, weight),
-                       lambda: MLPModel(data, mlp, train), design, workers, verbose)
+                       functools.partial(MLPModel, data, mlp, train), design, workers, verbose)
 
 
 def summarise(out: pd.DataFrame, target: str = DataConfig.target) -> dict:
