@@ -115,3 +115,21 @@ only to look up σ; it is never a network input.
 - **Whole table on the GPU**, index-sliced mini-batches — at 50k rows a
   DataLoader is the bottleneck; per-step overhead means batch 1024–2048 is
   5× faster per epoch than 512 with no skill cost.
+
+## Results so far (leave-station-out, 2006–2010, 37 stations, common 47,786 rows)
+
+| model | inputs | pooled NSE | stn > 0 | median stn NSE | median r | oracle de-biased median |
+|---|---|---|---|---|---|---|
+| nn-mlp (z-score only) | SMIPS + statics + antecedent | +0.329 | 12 | −0.49 | 0.78 | +0.57 |
+| nn-mlp B (log1p + static noise) | same | +0.379 | 17 | −0.33 | 0.79 | +0.51 |
+| nn-seq Transformer (NSE\*, L=365, 2-member) | SILO forcing window + statics, **no SMIPS** | +0.355 | 15 | −0.64 | 0.77 | +0.53 |
+| model6 (boosting) | as nn-mlp | +0.38 | 16/36 | | 0.81 | |
+| model8 (process bucket) | as nn-seq | +0.412 | 19 | +0.13 | 0.82 | +0.60 |
+
+The Transformer reaches the MLP's level **without SMIPS** — the same inputs as
+model8 — and is the first NN to fix some of the worst level outliers
+(Y7 −7.5 → +0.01, K12 −12.5 → −8.2, K8 −3.4 → −0.4, A4 −0.5 → +0.86). It loses
+elsewhere (A3, K1, K4, A5) and is 17 wins / 15 losses per station against the
+MLP. It is still short of model8, and the deficit is still level: median 66 %
+of station MSE is bias; de-biased it is +0.53. Its water balance is learned;
+model8's is enforced.
