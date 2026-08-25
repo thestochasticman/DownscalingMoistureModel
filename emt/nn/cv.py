@@ -27,14 +27,14 @@ def block_of(station: str) -> str:
     return {"Y": "YANCO", "K": "KYEAMBA", "A": "ADELONG"}.get(station[0], station)
 
 
-def fold_labels(d: TabularData, design: str) -> np.ndarray:
+def fold_labels(d, design: str) -> np.ndarray:
     block = np.array([block_of(s) for s in d.station])
     year = pd.DatetimeIndex(d.time).year.astype(str).to_numpy()
     return {"station": d.station, "block": block, "year": year,
             "blockyear": np.char.add(np.char.add(block, "|"), year)}[design]
 
 
-def train_mask(labels: np.ndarray, held: str, design: str, d: TabularData) -> np.ndarray:
+def train_mask(labels: np.ndarray, held: str, design: str, d) -> np.ndarray:
     if design != "blockyear":
         return labels != held
     blk, yr = held.split("|")
@@ -43,26 +43,27 @@ def train_mask(labels: np.ndarray, held: str, design: str, d: TabularData) -> np
 
 def _fold(args):
     """One fold: fit on the training rows, predict the held-out rows."""
-    d, tr, te, data, mlp, train = args
-    model = MLPModel(data, mlp, train).fit_data(d.subset(tr))
-    return model.predict_X(d.X[te])
+    d, tr, te, factory = args
+    model = factory().fit_data(d.subset(tr))
+    return model.predict_data(d.subset(te))
 
 
-def run(df: pd.DataFrame, design: str = "station", data: DataConfig = DataConfig(),
-        mlp: MLPConfig = MLPConfig(), train: TrainConfig = TrainConfig(),
-        weight: np.ndarray | None = None, workers: int = 1, verbose: bool = True) -> pd.DataFrame:
-    """Out-of-fold predictions under ``design``. ``workers > 1`` runs folds in
-    parallel processes sharing the GPU -- the nets are tiny, so several folds
-    fit comfortably and the wall-clock is dominated by per-step overhead that
-    parallelism hides."""
+def run_dataset(d, factory, design: str = "station", workers: int = 1,
+                verbose: bool = True) -> pd.DataFrame:
+    """Out-of-fold predictions under ``design`` for any dataset exposing
+    ``station``, ``time``, ``y``, ``subset(mask)``, ``frame(pred)`` and any
+    model from ``factory()`` exposing ``fit_data`` / ``predict_data``.
+
+    ``workers > 1`` runs folds in parallel processes sharing the GPU -- the
+    nets are small, so several folds fit comfortably and the wall-clock is
+    dominated by per-step overhead that parallelism hides."""
     if design not in DESIGNS:
         raise ValueError(f"design must be one of {DESIGNS}")
-    d = TabularData.from_frame(df, data, weight)
     labels = fold_labels(d, design)
     pred = np.full(len(d), np.nan)
     folds = sorted(np.unique(labels))
     masks = [(labels == held, train_mask(labels, held, design, d)) for held in folds]
-    jobs = [(d, tr, te, data, mlp, train) for te, tr in masks]
+    jobs = [(d, tr, te, factory) for te, tr in masks]
 
     def report(i, held, te, tr):
         if verbose:
@@ -84,6 +85,14 @@ def run(df: pd.DataFrame, design: str = "station", data: DataConfig = DataConfig
     out = d.frame(pred)
     out["fold"] = labels
     return out
+
+
+def run(df: pd.DataFrame, design: str = "station", data: DataConfig = DataConfig(),
+        mlp: MLPConfig = MLPConfig(), train: TrainConfig = TrainConfig(),
+        weight: np.ndarray | None = None, workers: int = 1, verbose: bool = True) -> pd.DataFrame:
+    """The tabular MLP on the ladder."""
+    return run_dataset(TabularData.from_frame(df, data, weight),
+                       lambda: MLPModel(data, mlp, train), design, workers, verbose)
 
 
 def summarise(out: pd.DataFrame, target: str = DataConfig.target) -> dict:

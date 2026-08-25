@@ -12,9 +12,9 @@ import pandas as pd
 import torch
 
 from emt.nn.config import DataConfig, MLPConfig, TrainConfig
-from emt.nn.data import Scaler, TabularData
+from emt.nn.data import Scaler, TabularData, TabularView
 from emt.nn.mlp import ResidualMLP
-from emt.nn.train import Trainer
+from emt.nn.train import Trainer, device_for
 
 
 class MLPModel:
@@ -31,7 +31,9 @@ class MLPModel:
 
     def fit_data(self, d: TabularData) -> "MLPModel":
         self.scaler = Scaler.fit(d.X, d.y, self.data.log_idx)
-        trainer = Trainer(self.train_cfg, self.scaler, self.verbose)
+        trainer = Trainer(self.train_cfg, self.verbose)
+        view = lambda sub: TabularView(sub, self.scaler, trainer.device,  # noqa: E731
+                                       self.train_cfg.input_noise, self.train_cfg.static_noise)
         self.nets, self.history = [], []
         for k in range(self.train_cfg.n_ensemble):
             seed = self.train_cfg.seed + 1000 * k
@@ -40,7 +42,8 @@ class MLPModel:
             if self.verbose:
                 print(f"[member {k + 1}/{self.train_cfg.n_ensemble}] "
                       f"train {tr.sum()} rows / val {va.sum()} rows", flush=True)
-            self.history.append(trainer.fit(net, d.subset(tr), d.subset(va) if va.any() else None, seed))
+            self.history.append(trainer.fit(net, view(d.subset(tr)),
+                                            view(d.subset(va)) if va.any() else None, seed))
             self.nets.append(net.cpu())
         return self
 
@@ -51,8 +54,15 @@ class MLPModel:
     def predict_X(self, X: np.ndarray) -> np.ndarray:
         if not self.nets:
             raise RuntimeError("MLPModel is not fitted")
-        trainer = Trainer(self.train_cfg, self.scaler)
-        return np.mean([trainer.predict(net, X) for net in self.nets], axis=0)
+        d = TabularData(X, np.full(len(X), np.nan, np.float32), np.array(["?"] * len(X)),
+                        np.full(len(X), np.datetime64("NaT")), np.ones(len(X), np.float32), self.data)
+        return self.predict_data(d)
+
+    def predict_data(self, d: TabularData) -> np.ndarray:
+        trainer = Trainer(self.train_cfg)
+        view = TabularView(d, self.scaler, trainer.device)
+        ys = torch.stack([trainer.predict_view(net, view) for net in self.nets]).mean(0)
+        return self.scaler.y_inv(ys.cpu().numpy())
 
     # -- persistence ----------------------------------------------------------
     def save(self, path: str | Path) -> Path:

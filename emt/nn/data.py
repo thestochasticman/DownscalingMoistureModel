@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import torch
 
 from emt.nn.config import DataConfig
 
@@ -102,3 +103,25 @@ class TabularData:
         if pred is not None:
             out["pred"] = pred
         return out
+
+
+class TabularView:
+    """A ``TabularData`` standardised and resident on a device (see ``train.DeviceView``)."""
+
+    def __init__(self, d: TabularData, scaler: Scaler, device: torch.device,
+                 input_noise: float = 0.0, static_noise: float = 0.0):
+        T = lambda a: torch.as_tensor(a, dtype=torch.float32, device=device)  # noqa: E731
+        self.n = len(d)
+        self.X = T(scaler.x(d.X))
+        self.y, self.w = T(scaler.y(d.y)), T(d.weight)
+        self.sigma = T(d.station_sigma(scaler))
+        noise = torch.full((d.X.shape[1],), input_noise, device=device)
+        if d.cfg.static_idx:
+            noise[list(d.cfg.static_idx)] = static_noise
+        self.noise = noise if bool((noise > 0).any()) else None
+
+    def batch(self, idx: torch.Tensor, noisy: bool) -> torch.Tensor:
+        xb = self.X[idx]
+        if noisy and self.noise is not None:
+            xb = xb + self.noise * torch.randn_like(xb)
+        return xb

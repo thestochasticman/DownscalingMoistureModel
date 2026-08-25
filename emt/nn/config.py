@@ -80,3 +80,39 @@ class TrainConfig:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+# --------------------------------------------------------------------------- #
+# sequence model (no SMIPS: SILO forcing window + station statics)
+# --------------------------------------------------------------------------- #
+FORCING_VARS = ("daily_rain", "et_morton_potential", "vp_deficit")
+STATIC_VARS = ("soil_clay", "soil_sand", "soil_awc", "soil_bdw",
+               "elevation", "slope", "northness", "eastness", "twi", "hli", "accumulation",
+               "aridity")
+LOG1P_STATIC = ("slope", "accumulation")
+
+
+@dataclass(frozen=True)
+class SeqDataConfig:
+    forcing: tuple[str, ...] = FORCING_VARS
+    statics: tuple[str, ...] = STATIC_VARS
+    log1p_static: tuple[str, ...] = LOG1P_STATIC
+    lookback: int = 365            # days of forcing before (and including) the target day
+    target: str = TARGET
+    group: str = GROUP
+    time: str = TIME
+
+    @property
+    def static_log_idx(self) -> tuple[int, ...]:
+        return tuple(i for i, f in enumerate(self.statics) if f in self.log1p_static)
+
+
+@dataclass(frozen=True)
+class TransformerConfig:
+    d_model: int = 64
+    n_layers: int = 3
+    n_heads: int = 4
+    d_ff: int = 128
+    dropout: float = 0.1
+    static_dropout: float = 0.3    # dropout on the static token embedding
+    readout: str = "last"          # "last" token (= target day) | "mean" over tokens

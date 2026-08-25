@@ -21,8 +21,9 @@ from emt.nn.model import MLPModel
 DEFAULT_TABLE = "data/model6_features_2006_2010.csv"
 
 
-def add_config_args(ap: argparse.ArgumentParser) -> None:
-    for dc, prefix in ((TrainConfig, ""), (MLPConfig, "")):
+def add_config_args(ap: argparse.ArgumentParser, dcs=(TrainConfig, MLPConfig)) -> None:
+    """One CLI flag per field of each dataclass in ``dcs``."""
+    for dc in dcs:
         for f in dataclasses.fields(dc):
             if f.name == "device":
                 ap.add_argument("--device", default=None)
@@ -40,11 +41,12 @@ def add_config_args(ap: argparse.ArgumentParser) -> None:
                 ap.add_argument(f"--{f.name}", type=type(f.default), default=f.default)
 
 
+def config_from_args(dc, a):
+    return dc(**{f.name: getattr(a, f.name) for f in dataclasses.fields(dc)})
+
+
 def configs(a) -> tuple[MLPConfig, TrainConfig]:
-    d = vars(a)
-    mlp = MLPConfig(**{f.name: d[f.name] for f in dataclasses.fields(MLPConfig)})
-    train = TrainConfig(**{f.name: d[f.name] for f in dataclasses.fields(TrainConfig)})
-    return mlp, train
+    return config_from_args(MLPConfig, a), config_from_args(TrainConfig, a)
 
 
 def main() -> None:

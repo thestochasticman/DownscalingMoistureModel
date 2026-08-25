@@ -1,23 +1,34 @@
-"""One training run: a net, a TrainConfig, a training set and an optional
-validation set -> trained net + epoch history.
+"""One training run: a net, a TrainConfig, a training view and an optional
+validation view -> trained net + epoch history.
 
-The whole training set lives on the device and mini-batches are index slices
-(the tables are tens of thousands of rows; a DataLoader would be the bottleneck).
+A *view* is data already resident on the device (see ``DeviceView``): it knows
+its length, its standardised target / weight / per-station sigma, and how to
+produce the net's input for a set of row indices (optionally with training
+noise). Tabular and sequence data both implement it, so this loop is shared.
+
 AdamW + one-cycle LR (warm-up, cosine anneal), gradient clipping, bf16 autocast,
-optional Gaussian input noise, early stopping on validation NSE with best-weight
-restore.
+early stopping on validation NSE with best-weight restore.
 """
 from __future__ import annotations
 
 import copy
 import math
+from typing import Protocol
 
 import numpy as np
 import torch
 
 from emt.nn import losses
 from emt.nn.config import TrainConfig
-from emt.nn.data import Scaler, TabularData
+
+
+class DeviceView(Protocol):
+    n: int
+    y: torch.Tensor          # (n,) standardised target
+    w: torch.Tensor          # (n,) sample weight
+    sigma: torch.Tensor      # (n,) per-station std of standardised target
+
+    def batch(self, idx: torch.Tensor, noisy: bool): ...   # -> net input(s)
 
 
 def device_for(cfg: TrainConfig) -> torch.device:
@@ -27,36 +38,27 @@ def device_for(cfg: TrainConfig) -> torch.device:
 
 
 class Trainer:
-    def __init__(self, cfg: TrainConfig, scaler: Scaler, verbose: bool = False):
-        self.cfg, self.scaler, self.verbose = cfg, scaler, verbose
+    def __init__(self, cfg: TrainConfig, verbose: bool = False):
+        self.cfg, self.verbose = cfg, verbose
         self.device = device_for(cfg)
         self.loss_fn = losses.get(cfg.loss)
+        self.use_amp = cfg.amp and self.device.type == "cuda"
 
-    def _tensors(self, d: TabularData):
-        T = lambda a: torch.as_tensor(a, dtype=torch.float32, device=self.device)  # noqa: E731
-        return (T(self.scaler.x(d.X)), T(self.scaler.y(d.y)), T(d.weight),
-                T(d.station_sigma(self.scaler)))
+    def autocast(self):
+        return torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.use_amp)
 
-    def fit(self, net: torch.nn.Module, train: TabularData, val: TabularData | None,
+    def fit(self, net: torch.nn.Module, train: DeviceView, val: DeviceView | None,
             seed: int) -> list[dict]:
         cfg = self.cfg
         torch.manual_seed(seed)
-        # per-column noise scale: statics get cfg.static_noise, the rest cfg.input_noise
-        noise = torch.full((train.X.shape[1],), cfg.input_noise, device=self.device)
-        if train.cfg.static_idx:
-            noise[list(train.cfg.static_idx)] = cfg.static_noise
-        use_noise = bool((noise > 0).any())
         net = net.to(self.device)
-        Xtr, ytr, wtr, str_ = self._tensors(train)
-        Xva, yva = self._tensors(val)[:2] if val is not None and len(val) else (None, None)
-        use_amp = cfg.amp and self.device.type == "cuda"
-        autocast = lambda: torch.autocast("cuda", dtype=torch.bfloat16, enabled=use_amp)  # noqa: E731
-
-        n = len(train)
+        n = train.n
         steps = max(1, math.ceil(n / cfg.batch_size))
         opt = torch.optim.AdamW(net.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+        total = cfg.epochs * steps
         sched = torch.optim.lr_scheduler.OneCycleLR(
-            opt, max_lr=cfg.lr, total_steps=cfg.epochs * steps, pct_start=cfg.warmup_frac,
+            opt, max_lr=cfg.lr, total_steps=total,
+            pct_start=min(0.9, max(cfg.warmup_frac, 1.5 / total)),   # >= 1 warm-up step
             anneal_strategy="cos", div_factor=25.0, final_div_factor=1e3)
         gen = torch.Generator().manual_seed(seed)
 
@@ -67,12 +69,9 @@ class Trainer:
             total = torch.zeros((), device=self.device)
             for i in range(steps):
                 idx = perm[i * cfg.batch_size:(i + 1) * cfg.batch_size]
-                xb = Xtr[idx]
-                if use_noise:
-                    xb = xb + noise * torch.randn_like(xb)
-                with autocast():
-                    pred = net(xb)
-                loss = self.loss_fn(pred.float(), ytr[idx], wtr[idx], str_[idx],
+                with self.autocast():
+                    pred = net(train.batch(idx, noisy=True))
+                loss = self.loss_fn(pred.float(), train.y[idx], train.w[idx], train.sigma[idx],
                                     eps=cfg.nse_eps, delta=cfg.huber_delta)
                 opt.zero_grad(set_to_none=True)
                 loss.backward()
@@ -83,11 +82,9 @@ class Trainer:
                 total += loss.detach()
             rec = dict(epoch=epoch, train_loss=total.item() / steps, lr=sched.get_last_lr()[0])
 
-            if Xva is not None:
-                net.eval()
-                with torch.no_grad(), autocast():
-                    pv = net(Xva).float()
-                rec["val_nse"] = float(1 - ((pv - yva) ** 2).sum() / ((yva - yva.mean()) ** 2).sum())
+            if val is not None and val.n:
+                pv = self.predict_view(net, val)
+                rec["val_nse"] = float(1 - ((pv - val.y) ** 2).sum() / ((val.y - val.y.mean()) ** 2).sum())
                 if rec["val_nse"] > best + 1e-4:
                     best, bad, best_state = rec["val_nse"], 0, copy.deepcopy(net.state_dict())
                 else:
@@ -95,15 +92,19 @@ class Trainer:
             history.append(rec)
             if self.verbose:
                 print("  " + " ".join(f"{k}={v:.4g}" for k, v in rec.items()), flush=True)
-            if Xva is not None and bad >= cfg.patience:
+            if val is not None and bad >= cfg.patience:
                 break
         if best_state is not None:
             net.load_state_dict(best_state)
         return history
 
     @torch.no_grad()
-    def predict(self, net: torch.nn.Module, X: np.ndarray, chunk: int = 65536) -> np.ndarray:
+    def predict_view(self, net: torch.nn.Module, view: DeviceView, chunk: int = 4096) -> torch.Tensor:
+        """Standardised predictions for every row of ``view`` (on device)."""
         net = net.to(self.device).eval()
-        xt = torch.as_tensor(self.scaler.x(X), dtype=torch.float32, device=self.device)
-        out = [net(xt[i:i + chunk]).float().cpu().numpy() for i in range(0, len(xt), chunk)]
-        return self.scaler.y_inv(np.concatenate(out) if out else np.zeros(0))
+        out = []
+        for i in range(0, view.n, chunk):
+            idx = torch.arange(i, min(i + chunk, view.n), device=self.device)
+            with self.autocast():
+                out.append(net(view.batch(idx, noisy=False)).float())
+        return torch.cat(out) if out else torch.zeros(0, device=self.device)

@@ -14,6 +14,7 @@ validation ladder as the rest of the repo.
 | `train.py` | `Trainer`: one net, one run — AdamW, one-cycle LR, clipping, bf16 autocast, input noise, early stopping with best-weight restore |
 | `model.py` | `MLPModel`: fit/predict on DataFrames, seed ensemble, `save`/`load` (`.pt`) |
 | `cv.py` | the ladder: `station` / `block` / `year` / `blockyear` folds, parallel across processes on one GPU; `summarise` |
+| `seq.py` | **the sequence model**: `SeqData` (per-station forcing panels + (station, day) samples), `SeqView` (on-GPU window gathering), `SeqTransformer`, `SeqModel`; own CLI |
 | `search.py` | resumable random hyper-parameter search scored on the ladder |
 | `__main__.py` | CLI |
 
@@ -37,6 +38,30 @@ m = MLPModel(train=TrainConfig(loss="nse", n_ensemble=5)).fit(df)
 m.predict(df_new)            # NaN in → NaN out
 m.save("data/models/nn_mlp.pt"); MLPModel.load("data/models/nn_mlp.pt")
 ```
+
+## The sequence model (`emt.nn.seq`)
+
+The neural analogue of the model7/8 bucket: **no SMIPS**, only the SILO forcing
+window and the station statics, so it runs for any date.
+
+    sample (station s, day t):
+      seq  = forcing[s, t-L+1 .. t]  x  (log1p rain, PET, VPD, doy sin, doy cos)     L = 365
+      sta  = statics[s]              (soil x4, terrain x7, aridity)
+    tokens = [static token] + L forcing tokens, learned positional embedding
+    pre-norm Transformer encoder (d=64, 3 layers, 4 heads) -> readout at token t -> linear
+
+Windows are gathered on the fly from a `(n_stations, T, channels)` forcing
+tensor on the GPU; nothing of size samples×L is ever built. `SeqData`/`SeqView`
+implement the same protocol as the tabular classes, so `Trainer`, the
+ensemble, the losses and the CV ladder are shared unchanged.
+
+```bash
+PYTHONPATH=. python -m emt.nn.seq cv  --design station --loss nse --workers 8 \
+    --epochs 60 --patience 10 --n_ensemble 2 --batch_size 512
+PYTHONPATH=. python -m emt.nn.seq fit --out data/models/nn_seq.pt
+```
+
+Cost: ~4.5 s/epoch at batch 256 (2.5 GB); 8 folds in parallel fit on one 32 GB card.
 
 ## Preprocessing
 
