@@ -99,7 +99,7 @@ class Trainer:
         return history
 
     @torch.no_grad()
-    def predict_view(self, net: torch.nn.Module, view: DeviceView, chunk: int = 4096) -> torch.Tensor:
+    def predict_view(self, net: torch.nn.Module, view: DeviceView, chunk: int = 1024) -> torch.Tensor:
         """Standardised predictions for every row of ``view`` (on device)."""
         net = net.to(self.device).eval()
         out = []

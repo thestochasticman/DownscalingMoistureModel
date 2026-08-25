@@ -43,11 +43,23 @@ def train_mask(labels: np.ndarray, held: str, design: str, d) -> np.ndarray:
     return (fold_labels(d, "block") != blk) & (fold_labels(d, "year") != yr)
 
 
-def _fold(args):
-    """One fold: fit on the training rows, predict the held-out rows."""
+def _fold(args, retries: int = 3):
+    """One fold: fit on the training rows, predict the held-out rows.
+
+    A CUDA OOM (several workers peaking at once on one card) is retried after
+    freeing the cache and waiting, rather than killing the whole run."""
+    import time
+    import torch
     d, tr, te, factory = args
-    model = factory().fit_data(d.subset(tr))
-    return model.predict_data(d.subset(te))
+    for attempt in range(retries + 1):
+        try:
+            model = factory().fit_data(d.subset(tr))
+            return model.predict_data(d.subset(te))
+        except torch.OutOfMemoryError:
+            if attempt == retries:
+                raise
+            torch.cuda.empty_cache()
+            time.sleep(30 * (attempt + 1))
 
 
 def run_dataset(d, factory, design: str = "station", workers: int = 1,
@@ -79,7 +91,9 @@ def run_dataset(d, factory, design: str = "station", workers: int = 1,
             pred[te] = _fold(job)
             report(i, held, te, tr)
     else:
+        import os
         import torch.multiprocessing as mp
+        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         with mp.get_context("spawn").Pool(workers) as pool:
             for i, (held, (te, tr), p) in enumerate(zip(folds, masks, pool.imap(_fold, jobs)), 1):
                 pred[te] = p
