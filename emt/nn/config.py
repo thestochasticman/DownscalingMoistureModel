@@ -116,3 +116,20 @@ class TransformerConfig:
     dropout: float = 0.1
     static_dropout: float = 0.3    # dropout on the static token embedding
     readout: str = "last"          # "last" token (= target day) | "mean" over tokens
+
+
+# --------------------------------------------------------------------------- #
+# hybrid: differentiable model7 bucket with parameters from statics
+# --------------------------------------------------------------------------- #
+BUCKET_PARAMS = ("smax", "alpha", "k", "theta_r", "dtheta")
+BUCKET_BOUNDS = ((50.0, 400.0), (0.05, 2.0), (5e-4, 0.2), (2.0, 25.0), (5.0, 45.0))
+BUCKET_X0 = (150.0, 0.6, 0.02, 8.0, 25.0)
+
+
+@dataclass(frozen=True)
+class HybridConfig:
+    hidden: int = 32               # width of the statics -> parameter-deviation MLP (0 = global params only)
+    dropout: float = 0.1
+    dev_scale: float = 1.0         # multiplier on the deviation logits (0 disables site variation)
+    offset: bool = True            # additive per-station offset head on the readout (model8's ridge stage)
+    learn: tuple[str, ...] = BUCKET_PARAMS   # which parameters may vary by station
