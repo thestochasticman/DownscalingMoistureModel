@@ -118,27 +118,29 @@ def run(df: pd.DataFrame, design: str = "station", data: DataConfig = DataConfig
                        functools.partial(MLPModel, data, mlp, train), design, workers, verbose)
 
 
-def stratified_weight_fn(temper: float = 0.5):
+class StratifiedWeights:
     """model8's stratified training weights (see handout/run_blocked_cv.py):
     aridity (P/PET) tertile x block cells, each stratum equal total weight,
-    split equally over its blocks, then its samples; tempered by **temper.
-    Returns a callable(subset) for ``run_dataset(weight_fn=...)``."""
-    f = pd.read_csv("data/process_forcing_2005_2010.csv")
-    g = f.groupby("station").agg(rain=("daily_rain", "mean"), pet=("et_morton_potential", "mean"))
-    strata = pd.qcut(g["rain"] / g["pet"], 3, labels=["dry", "mid", "wet"])
+    split equally over its blocks, then its samples; tempered by ``**temper``.
+    A picklable callable(subset) for ``run_dataset(weight_fn=...)`` -- computed
+    on each fold's own training rows."""
 
-    def fn(sub):
+    def __init__(self, temper: float = 0.5):
+        f = pd.read_csv("data/process_forcing_2005_2010.csv")
+        g = f.groupby("station").agg(rain=("daily_rain", "mean"), pet=("et_morton_potential", "mean"))
+        self.strata = pd.qcut(g["rain"] / g["pet"], 3, labels=["dry", "mid", "wet"])
+        self.temper = temper
+
+    def __call__(self, sub):
         stn = pd.Series(sub.station)
-        df = pd.DataFrame({"stratum": stn.map(strata), "block": stn.map(block_of)})
+        df = pd.DataFrame({"stratum": stn.map(self.strata), "block": stn.map(block_of)})
         cell = list(zip(df["stratum"], df["block"]))
         cell_n = pd.Series(cell).value_counts()
         blocks_in = df.drop_duplicates().groupby("stratum", observed=True).size()
         n_strata = df["stratum"].nunique()
         w = np.array([1.0 / (n_strata * blocks_in[s] * cell_n[(s, b)]) for s, b in cell])
-        w = w ** temper
+        w = w ** self.temper
         return w / w.mean()
-
-    return fn
 
 
 def summarise(out: pd.DataFrame, target: str = DataConfig.target) -> dict:

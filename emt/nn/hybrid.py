@@ -247,7 +247,7 @@ def main() -> None:
     print(f"net   {net}\ntrain {train}")
     tag = a.tag or f"nn_hybrid_{train.loss}"
     if a.cmd == "cv":
-        wf = cv.stratified_weight_fn() if a.weighted else None
+        wf = cv.StratifiedWeights() if a.weighted else None
         out = cv.run_dataset(d, functools.partial(HybridModel, dcfg, net, train), a.design, a.workers,
                              True, weight_fn=wf)
         cv.print_summary(f"{tag} @{a.design}", out)
