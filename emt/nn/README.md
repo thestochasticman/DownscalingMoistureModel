@@ -133,3 +133,21 @@ elsewhere (A3, K1, K4, A5) and is 17 wins / 15 losses per station against the
 MLP. It is still short of model8, and the deficit is still level: median 66 %
 of station MSE is bias; de-biased it is +0.53. Its water balance is learned;
 model8's is enforced.
+
+### Hybrid (differentiable bucket) results
+
+| design | model | pooled NSE | stn > 0 | median stn NSE | median \|bias\| | de-biased median |
+|---|---|---|---|---|---|---|
+| station | **hybrid** | +0.352 | 19/37 | **+0.02** | **3.34** | +0.54 |
+| station | model8 | +0.408 | 20/37 | +0.13 | 3.57 | +0.61 |
+| block | **hybrid** | +0.244 | 18/37 | −0.00 | 3.83 | +0.54 |
+| block | model8 (weighted) | +0.322 | 20/37 | +0.07 | 3.17 | +0.60 |
+
+First untuned configuration (hidden 32, dev_scale 1, 3-member, no stratified
+weights). It does not beat model8 pooled, but it is the only model whose
+station-out **median** station is positive besides model8, and it has the best
+median |bias| and by far the best M-site transfer (M4 +0.54, M5 +0.75, M6 +0.45
+blocked; M7 −6.6 where every other model is −13 to −26). Station-wise vs
+model8: 12 wins / 20 losses — it fixes model8's worst failures (K2 +3.8,
+A5 +2.3, Y7 +0.8, K8 +0.7 NSE) and loses where model8 is already good.
+The two models' errors are again complementary.
