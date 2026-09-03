@@ -30,7 +30,7 @@ class MLPModel:
         return self.fit_data(TabularData.from_frame(df, self.data, weight))
 
     def fit_data(self, d: TabularData) -> "MLPModel":
-        self.scaler = Scaler.fit(d.X, d.y, self.data.log_idx)
+        self.scaler = Scaler.fit(d.X, d.y, self.data.log_idx, self.data.scale)
         trainer = Trainer(self.train_cfg, self.verbose)
         view = lambda sub: TabularView(sub, self.scaler, trainer.device,  # noqa: E731
                                        self.train_cfg.input_noise, self.train_cfg.static_noise)

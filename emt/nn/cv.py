@@ -46,14 +46,21 @@ def train_mask(labels: np.ndarray, held: str, design: str, d) -> np.ndarray:
 def _fold(args, retries: int = 3):
     """One fold: fit on the training rows, predict the held-out rows.
 
+    ``weight_fn(subset)`` -- computed on each fold's own training rows, exactly
+    like run_blocked_cv -- replaces the subset's sample weights before the fit.
+
     A CUDA OOM (several workers peaking at once on one card) is retried after
     freeing the cache and waiting, rather than killing the whole run."""
     import time
     import torch
-    d, tr, te, factory = args
+    d, tr, te, factory, weight_fn = args
     for attempt in range(retries + 1):
         try:
-            model = factory().fit_data(d.subset(tr))
+            sub = d.subset(tr)
+            if weight_fn is not None:
+                w = np.asarray(weight_fn(sub), np.float32)
+                sub.weight = w * (len(w) / w.sum())
+            model = factory().fit_data(sub)
             return model.predict_data(d.subset(te))
         except torch.OutOfMemoryError:
             if attempt == retries:
@@ -63,7 +70,7 @@ def _fold(args, retries: int = 3):
 
 
 def run_dataset(d, factory, design: str = "station", workers: int = 1,
-                verbose: bool = True) -> pd.DataFrame:
+                verbose: bool = True, weight_fn=None) -> pd.DataFrame:
     """Out-of-fold predictions under ``design`` for any dataset exposing
     ``station``, ``time``, ``y``, ``subset(mask)``, ``frame(pred)`` and any
     model from ``factory()`` exposing ``fit_data`` / ``predict_data``.
@@ -77,7 +84,7 @@ def run_dataset(d, factory, design: str = "station", workers: int = 1,
     pred = np.full(len(d), np.nan)
     folds = sorted(np.unique(labels))
     masks = [(labels == held, train_mask(labels, held, design, d)) for held in folds]
-    jobs = [(d, tr, te, factory) for te, tr in masks]
+    jobs = [(d, tr, te, factory, weight_fn) for te, tr in masks]
 
     def report(i, held, te, tr):
         if verbose:
@@ -109,6 +116,29 @@ def run(df: pd.DataFrame, design: str = "station", data: DataConfig = DataConfig
     """The tabular MLP on the ladder."""
     return run_dataset(TabularData.from_frame(df, data, weight),
                        functools.partial(MLPModel, data, mlp, train), design, workers, verbose)
+
+
+def stratified_weight_fn(temper: float = 0.5):
+    """model8's stratified training weights (see handout/run_blocked_cv.py):
+    aridity (P/PET) tertile x block cells, each stratum equal total weight,
+    split equally over its blocks, then its samples; tempered by **temper.
+    Returns a callable(subset) for ``run_dataset(weight_fn=...)``."""
+    f = pd.read_csv("data/process_forcing_2005_2010.csv")
+    g = f.groupby("station").agg(rain=("daily_rain", "mean"), pet=("et_morton_potential", "mean"))
+    strata = pd.qcut(g["rain"] / g["pet"], 3, labels=["dry", "mid", "wet"])
+
+    def fn(sub):
+        stn = pd.Series(sub.station)
+        df = pd.DataFrame({"stratum": stn.map(strata), "block": stn.map(block_of)})
+        cell = list(zip(df["stratum"], df["block"]))
+        cell_n = pd.Series(cell).value_counts()
+        blocks_in = df.drop_duplicates().groupby("stratum", observed=True).size()
+        n_strata = df["stratum"].nunique()
+        w = np.array([1.0 / (n_strata * blocks_in[s] * cell_n[(s, b)]) for s, b in cell])
+        w = w ** temper
+        return w / w.mean()
+
+    return fn
 
 
 def summarise(out: pd.DataFrame, target: str = DataConfig.target) -> dict:

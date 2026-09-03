@@ -17,17 +17,40 @@ from emt.nn.config import DataConfig
 
 @dataclass(frozen=True)
 class Scaler:
-    """log1p on the chosen columns, then z-score; target z-scored."""
+    """Feature scaling fitted on the training rows; target z-scored.
+
+    ``method``:
+      * ``"zscore"``   log1p on the chosen columns, then (x - mean) / std.
+      * ``"robust"``   log1p, then (x - median) / (IQR / 1.349) -- a 5-sigma
+                       outlier no longer sets the scale of its column.
+      * ``"quantile"`` rank against the training values -> Gaussian ppf.
+                       Immune to outliers and skew by construction (log1p is
+                       then redundant and skipped); with few training rows the
+                       mapping is a coarse staircase, linearly interpolated.
+    """
     x_mean: np.ndarray
     x_std: np.ndarray
     y_mean: float
     y_std: float
     log_idx: tuple[int, ...] = ()
+    method: str = "zscore"
+    x_sorted: np.ndarray | None = None      # (n_train, p), quantile only
 
     @classmethod
-    def fit(cls, X: np.ndarray, y: np.ndarray, log_idx: tuple[int, ...] = ()) -> "Scaler":
+    def fit(cls, X: np.ndarray, y: np.ndarray, log_idx: tuple[int, ...] = (),
+            method: str = "zscore") -> "Scaler":
+        ym, ys = float(y.mean()), float(y.std() + 1e-6)
+        if method == "quantile":
+            return cls(np.zeros(X.shape[1]), np.ones(X.shape[1]), ym, ys, (), method,
+                       np.sort(np.asarray(X, np.float64), axis=0))
         Xl = cls._log(X, log_idx)
-        return cls(Xl.mean(0), Xl.std(0) + 1e-6, float(y.mean()), float(y.std() + 1e-6), log_idx)
+        if method == "robust":
+            med = np.median(Xl, axis=0)
+            iqr = np.quantile(Xl, 0.75, axis=0) - np.quantile(Xl, 0.25, axis=0)
+            return cls(med, iqr / 1.349 + 1e-6, ym, ys, log_idx, method)
+        if method != "zscore":
+            raise ValueError(f"unknown scaling method {method!r}")
+        return cls(Xl.mean(0), Xl.std(0) + 1e-6, ym, ys, log_idx, method)
 
     @staticmethod
     def _log(X, idx):
@@ -37,7 +60,16 @@ class Scaler:
         X[:, list(idx)] = np.log1p(np.clip(X[:, list(idx)], 0, None))
         return X
 
-    def x(self, X): return (self._log(X, self.log_idx) - self.x_mean) / self.x_std
+    def x(self, X):
+        if self.method == "quantile":
+            from scipy.stats import norm
+            n, p = self.x_sorted.shape
+            grid = (np.arange(n) + 0.5) / n
+            out = np.empty_like(np.asarray(X, np.float64))
+            for j in range(p):
+                out[:, j] = np.interp(X[:, j], self.x_sorted[:, j], grid)
+            return norm.ppf(np.clip(out, 0.005, 0.995)).astype(np.float32)
+        return (self._log(X, self.log_idx) - self.x_mean) / self.x_std
     def y(self, y): return (y - self.y_mean) / self.y_std
     def y_inv(self, ys): return ys * self.y_std + self.y_mean
 

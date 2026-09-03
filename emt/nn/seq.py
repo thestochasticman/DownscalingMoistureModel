@@ -149,7 +149,7 @@ class SeqScaler:
         f_mean, f_std = flat.mean(0), flat.std(0) + 1e-6
         # statics scaler is fitted on the stations present in the SAMPLES (training fold)
         S_train = d.S[np.unique(d.stn_idx)]
-        return cls(f_mean, f_std, Scaler.fit(S_train, d.y, d.cfg.static_log_idx))
+        return cls(f_mean, f_std, Scaler.fit(S_train, d.y, d.cfg.static_log_idx, d.cfg.scale))
 
     @staticmethod
     def _lograin(F, cfg):
@@ -301,6 +301,7 @@ def main() -> None:
     ap.add_argument("--forcing", default=str(DATA / "process_forcing_2005_2010.csv"))
     ap.add_argument("--target", default=str(DATA / "process_target_2006_2010.csv"))
     ap.add_argument("--lookback", type=int, default=SeqDataConfig.lookback)
+    ap.add_argument("--scale", default="zscore", choices=["zscore", "robust", "quantile"])
     ap.add_argument("--out", default=None)
     ap.add_argument("--tag", default=None)
     ap.add_argument("--workers", type=int, default=1)
@@ -309,7 +310,7 @@ def main() -> None:
     a = ap.parse_args()
     train = config_from_args(TrainConfig, a)
     net = config_from_args(TransformerConfig, a)
-    dcfg = SeqDataConfig(lookback=a.lookback)
+    dcfg = SeqDataConfig(lookback=a.lookback, scale=a.scale)
     forcing, target, statics = load_frames(a.forcing, a.target)
     d = SeqData.build(forcing, target, statics, dcfg)
     print(f"seq: {len(d)} samples, {len(d.stations)} stations, lookback {dcfg.lookback}, "

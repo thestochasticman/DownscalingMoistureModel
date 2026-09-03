@@ -156,7 +156,7 @@ class HybridModel:
 
     def fit_data(self, d: SeqData) -> "HybridModel":
         S_train = d.S[np.unique(d.stn_idx)]
-        self.scaler = Scaler.fit(S_train, d.y, d.cfg.static_log_idx)
+        self.scaler = Scaler.fit(S_train, d.y, d.cfg.static_log_idx, d.cfg.scale)
         trainer = Trainer(self.train_cfg, self.verbose)
         view = lambda sub: HybridView(sub, self.scaler, trainer.device, self.train_cfg.static_noise)  # noqa: E731
         self.nets, self.history = [], []
@@ -230,21 +230,26 @@ def main() -> None:
     ap.add_argument("--target", default=str(DATA / "process_target_2006_2010.csv"))
     ap.add_argument("--out", default=None)
     ap.add_argument("--tag", default=None)
+    ap.add_argument("--scale", default="zscore", choices=["zscore", "robust", "quantile"])
     ap.add_argument("--workers", type=int, default=1)
+    ap.add_argument("--weighted", action="store_true",
+                    help="model8's stratified training weights (per training fold)")
     ap.add_argument("-v", "--verbose", action="store_true")
     add_config_args(ap, (TrainConfig, HybridConfig))
     ap.set_defaults(**HYBRID_TRAIN)
     a = ap.parse_args()
     train = config_from_args(TrainConfig, a)
     net = config_from_args(HybridConfig, a)
-    dcfg = SeqDataConfig(lookback=1)
+    dcfg = SeqDataConfig(lookback=1, scale=a.scale)
     forcing, target, statics = load_frames(a.forcing, a.target)
     d = SeqData.build(forcing, target, statics, dcfg)
     print(f"hybrid: {len(d)} samples, {len(d.stations)} stations, panel {d.F.shape[:2]}, statics {d.S.shape[1]}")
     print(f"net   {net}\ntrain {train}")
     tag = a.tag or f"nn_hybrid_{train.loss}"
     if a.cmd == "cv":
-        out = cv.run_dataset(d, functools.partial(HybridModel, dcfg, net, train), a.design, a.workers, True)
+        wf = cv.stratified_weight_fn() if a.weighted else None
+        out = cv.run_dataset(d, functools.partial(HybridModel, dcfg, net, train), a.design, a.workers,
+                             True, weight_fn=wf)
         cv.print_summary(f"{tag} @{a.design}", out)
         path = a.out or f"data/{tag}_{a.design}cv_predictions.csv"
         out.to_csv(path, index=False)

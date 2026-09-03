@@ -39,6 +39,7 @@ class DataConfig:
     time: str = TIME
     log1p: tuple[str, ...] = LOG1P_FEATURES       # () disables
     static: tuple[str, ...] = STATIC_FEATURES     # () = treat everything as dynamic
+    scale: str = "zscore"                         # zscore | robust | quantile (see data.Scaler)
 
     @property
     def log_idx(self) -> tuple[int, ...]:
@@ -98,6 +99,7 @@ class SeqDataConfig:
     statics: tuple[str, ...] = STATIC_VARS
     log1p_static: tuple[str, ...] = LOG1P_STATIC
     lookback: int = 365            # days of forcing before (and including) the target day
+    scale: str = "zscore"          # statics scaling: zscore | robust | quantile
     target: str = TARGET
     group: str = GROUP
     time: str = TIME
