@@ -176,3 +176,22 @@ the lever. Hybrid, all three treatments, both designs:
   result in the repo under BOTH designs: station +0.421 / 20 / +0.15,
   block +0.374 / block-median +0.38. The two models' errors are complementary;
   the average beats each everywhere it matters.
+
+### The stack (`emt.nn.stack`): a negative result, and the diversity win
+
+A learned convex gate (statics + base disagreement → softmax weights over the
+base predictions, zero-initialised at the plain mean, fold-disciplined) LOSES
+to equal weighting:
+
+| design | plain multi-base mean | gated stack |
+|---|---|---|
+| station (hybrid, model8, mlp, seq) | **+0.450** pooled | +0.439 |
+| block (hybrid, model8, model6) | **+0.401** pooled / stn-med **+0.12** / blk-med **+0.38** | +0.360 / +0.00 / +0.29 |
+
+Thirty-seven sites are too few to learn a transferable who-to-trust map; under
+the block design the gate is itself a spatial model and fails like one. What
+the exercise surfaced instead is that **base diversity is the win**: the plain
+mean over three (blocked) / four (station) validated models is the repo's best
+result under both designs — blocked +0.401 pooled, block-median +0.38, median
+station +0.12 — with zero trainable parameters. That is the recommended
+combination.

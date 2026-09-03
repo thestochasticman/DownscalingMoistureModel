@@ -39,6 +39,15 @@ folds; every number below is out-of-fold):
 | Blocked median block NSE | — | — | **+0.30** | +0.25 | **+0.38** |
 | Blocked blocks NSE>0 | — | — | 7/9 | 7/9 | 7/9 |
 
+**Post-script — the combination that actually wins.** A learned gating net
+over the bases (`emt/nn/stack.py`) is a documented *negative result*: it loses
+to equal weighting under both designs (37 sites cannot teach a transferable
+who-to-trust map). But widening the plain mean to every validated base beats
+the 2-model mean above: **mean(hybrid, model8, model6) blocked = +0.401
+pooled, block-median +0.38, median station +0.12, 21/37 positive** — the
+repo's best blocked numbers — and mean(hybrid, model8, mlp, seq) station-out
+= **+0.450** pooled. Diversity, not learned weighting, is the win.
+
 The single-model story: the MLP matches model6 on identical features; the
 Transformer matches the MLP *without SMIPS*; and the hybrid — the only one
 whose physics is enforced rather than learned — is the **first model in the
