@@ -18,12 +18,19 @@ grouped early stopping and seed ensemble as [nn-mlp](nn_mlp.md).
 
 ## Results — leave-station-out (37 stations, 2006–2010)
 
-| | nn-transformer | nn-mlp (needs SMIPS) | model8 (same inputs) |
+| | small (d=64, 3L) | **scaled (d=128, 4L, 3-member)** | model8 (same inputs) |
 |---|---|---|---|
-| pooled NSE / r | +0.355 / 0.61 | +0.379 / 0.62 | +0.408 / 0.64 |
-| stations NSE>0 | 15/37 | 17/37 | 20/37 |
-| median stn NSE | −0.64 | −0.33 | +0.13 |
-| median stn r | 0.77 | 0.79 | 0.82 |
+| station pooled NSE / r | +0.355 / 0.61 | **+0.431 / 0.66** | +0.408 / 0.64 |
+| station stations NSE>0 / median | 15/37 / −0.64 | 17/37 / −0.07 | 20/37 / +0.13 |
+| station median stn r | 0.77 | **0.83** | 0.82 |
+| blocked pooled NSE | +0.217 | +0.221 | +0.322 |
+
+**Scaling pays for interpolation only.** The d=128 / 4-layer / 3-member
+configuration is the best single-network station-out on the branch (+0.431,
+above model8) with the joint-best dynamics (median r 0.83) — yet its blocked
+transfer does not move (+0.22 at either size). Capacity buys a better learned
+water balance near instrumented sites and nothing at unseen districts: the
+level wall is informational, not architectural.
 
 Three findings. **The SMIPS product is not necessary to reach ~+0.36**: on
 model8's inputs the untuned Transformer matches the SMIPS-fed MLP. **The

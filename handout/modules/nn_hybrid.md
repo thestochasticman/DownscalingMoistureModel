@@ -45,6 +45,17 @@ ADELONG (−1.07 vs +0.34). **M7 — the station every model 1–10 fails at
 NSE −13 to −26 — comes to −0.11 station-out** (bias +0.4 pp). The fitted
 per-station parameters remain physical (smax 220–310 mm, α > 1 as in model7).
 
+**The SMIPS level anchor (`--anchor`).** The residual error is per-station
+level, and level at an unseen site needs an *observation*, not another proxy.
+Adding each site's SMIPS climatological mean as a static (independent of
+OzNet, so leakage-safe) gives station-out **+0.387 pooled, 21/37 positive
+(the most of any single model in the repo), median +0.06, median |bias| 3.17**
+against +0.346 / 18 / −0.05 without it. Under blocked validation it is a
+wash pooled (+0.339 vs +0.354) — the SMIPS site-mean bias structure differs
+by district (within-aridity-tercile correlation with the true site mean is
+0.38–0.61, pooled only 0.34), so the learned correction transfers partially.
+Both variants earn ensemble seats ([nn-stack](nn_stack.md)).
+
 ![nn-track results](../figures/nn_track_results.png)
 
 Held-out series for every station — compare the same figure on the

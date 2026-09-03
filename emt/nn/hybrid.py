@@ -231,6 +231,10 @@ def main() -> None:
     ap.add_argument("--out", default=None)
     ap.add_argument("--tag", default=None)
     ap.add_argument("--scale", default="zscore", choices=["zscore", "robust", "quantile"])
+    ap.add_argument("--anchor", action="store_true",
+                    help="add each site's SMIPS climatological mean as a static -- a "
+                         "measurement-based LEVEL observation (independent of OzNet, so "
+                         "leakage-safe; from data/model6_features_2006_2010.csv)")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--weighted", action="store_true",
                     help="model8's stratified training weights (per training fold)")
@@ -240,8 +244,13 @@ def main() -> None:
     a = ap.parse_args()
     train = config_from_args(TrainConfig, a)
     net = config_from_args(HybridConfig, a)
-    dcfg = SeqDataConfig(lookback=1, scale=a.scale)
+    statics_cols = SeqDataConfig.statics + (("smips_mean",) if a.anchor else ())
+    dcfg = SeqDataConfig(lookback=1, scale=a.scale, statics=statics_cols)
     forcing, target, statics = load_frames(a.forcing, a.target)
+    if a.anchor:
+        feat = pd.read_csv(DATA / "model6_features_2006_2010.csv")
+        smips_mean = feat.groupby("station")["smips_totalbucket"].mean().rename("smips_mean")
+        statics = statics.merge(smips_mean, on="station")
     d = SeqData.build(forcing, target, statics, dcfg)
     print(f"hybrid: {len(d)} samples, {len(d.stations)} stations, panel {d.F.shape[:2]}, statics {d.S.shape[1]}")
     print(f"net   {net}\ntrain {train}")
