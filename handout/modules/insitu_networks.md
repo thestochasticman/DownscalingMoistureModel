@@ -1,7 +1,7 @@
 # In-situ networks — the contract, and where more data would come from
 
 <!-- NAV -->
-[← Neural-network track](nn_track.md) · [Index](../README.md) · [Data quality →](qc.md)
+[← nn-stack](nn_stack.md) · [Index](../README.md) · [Data quality →](qc.md)
 <!-- /NAV -->
 
 Source: [`../../emt/insitu/base.py`](../../emt/insitu/base.py) ·
@@ -140,5 +140,5 @@ checked *before* any parser is written, which is the lesson CosmOZ taught.
 
 ---
 <!-- NAV -->
-[← Neural-network track](nn_track.md) · [Index](../README.md) · [Data quality →](qc.md)
+[← nn-stack](nn_stack.md) · [Index](../README.md) · [Data quality →](qc.md)
 <!-- /NAV -->

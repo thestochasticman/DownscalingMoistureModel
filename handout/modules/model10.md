@@ -1,7 +1,7 @@
 # `model10`: the hybrid — a negative result, with one instructive exception
 
 <!-- NAV -->
-[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [Neural-network track →](nn_track.md)
+[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [nn-mlp →](nn_mlp.md)
 <!-- /NAV -->
 
 Source: [`../../emt/model10/model.py`](../../emt/model10/model.py)
@@ -75,5 +75,5 @@ PYTHONPATH=. python handout/run_blocked_cv.py m10 m10@blockyear
 
 ---
 <!-- NAV -->
-[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [Neural-network track →](nn_track.md)
+[← Temporal validation](temporal_validation.md) · [Index](../README.md) · [nn-mlp →](nn_mlp.md)
 <!-- /NAV -->

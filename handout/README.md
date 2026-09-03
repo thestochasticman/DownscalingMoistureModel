@@ -53,9 +53,12 @@ then apply it. Each item links to a self-contained page.
 | 17 | [model9 · Pedotransfer readout](modules/model9.md) | Per-site soil hydraulic limits replace two global readout constants — best blocked transfer (+0.35), narrow gain |
 | 18 | [Temporal validation](modules/temporal_validation.md) | Leave-one-**year**-out across the drought break — time is the easy axis, space is the hard one |
 | 19 | [model10 · The hybrid](modules/model10.md) | Bucket storage as an ML feature — a negative result, with one instructive exception |
-| 20 | [Neural-network track](modules/nn_track.md) | MLP, Transformer, differentiable bucket — best blocked transfer (+0.35; +0.37 ensembled with model8) |
-| 21 | [In-situ networks](modules/insitu_networks.md) | The loader contract, the survey of more data, and what is blocking it |
-| 22 | [Data quality](modules/qc.md) | Sentinels, two rejected detectors, and the calibration drift that bounds the record |
+| 20 | [nn-mlp · Neural net on model6 features](modules/nn_mlp.md) | model6 parity; static noise beats the station-identity leak |
+| 21 | [nn-transformer · Forcing sequence model](modules/nn_transformer.md) | model6-level skill with **no SMIPS**; a learned water balance drifts in level |
+| 22 | [nn-hybrid · Differentiable bucket](modules/nn_hybrid.md) | **Best blocked transfer** (+0.35 > model8's +0.32); quantile statics were the lever; M7 solved |
+| 23 | [nn-stack · Learned combiner](modules/nn_stack.md) | Negative result — but the diversity mean is the repo's best (blocked +0.40) |
+| 24 | [In-situ networks](modules/insitu_networks.md) | The loader contract, the survey of more data, and what is blocking it |
+| 25 | [Data quality](modules/qc.md) | Sentinels, two rejected detectors, and the calibration drift that bounds the record |
 
 **3 · Applying the model**
 
