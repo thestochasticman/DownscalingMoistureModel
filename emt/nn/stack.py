@@ -73,21 +73,31 @@ BASES = {
 STATICS_CSVS = ("process_soil_statics.csv", "process_terrain_statics.csv",
                 "process_climate_statics.csv")
 GATE_STATICS = tuple(f for f in STATIC_FEATURES if f != "aridity") + ("aridity",)
+#: regime conditioning: WHEN to trust a base, not WHERE -- day-of-year and the
+#: recent forcing state, from the cached model6 feature table. Unlike statics
+#: these vary within a site, so the gate is not a purely spatial model and has
+#: ~50k samples (not 37 sites) to learn from.
+REGIME_FEATURES = ("doy_sin", "doy_cos", "rain_7", "rain_30", "ppet_30", "vpd_30")
 
 
-def build_table(design: str) -> tuple[pd.DataFrame, list[str]]:
-    """One row per (station, day): target, statics, and every base's
-    out-of-fold prediction (columns ``p_<name>``)."""
+def build_table(design: str, gate_on: str = "statics") -> tuple[pd.DataFrame, list[str]]:
+    """One row per (station, day): target, gate features (site statics or
+    regime state), and every base's out-of-fold prediction (``p_<name>``)."""
     tab = None
     for name, f in BASES[design].items():
         o = pd.read_csv(DATA / f, parse_dates=["time"])
         o = o[["station", "time", TARGET, "pred"]].rename(columns={"pred": f"p_{name}"})
         tab = o if tab is None else tab.merge(o.drop(columns=[TARGET]), on=["station", "time"])
-    statics = None
-    for f in STATICS_CSVS:
-        s = pd.read_csv(DATA / f)
-        statics = s if statics is None else statics.merge(s, on="station")
-    return tab.merge(statics, on="station").dropna(), [f"p_{n}" for n in BASES[design]]
+    if gate_on == "regime":
+        reg = pd.read_csv(DATA / "model6_features_2006_2010.csv", parse_dates=["time"])
+        tab = tab.merge(reg[["station", "time", *REGIME_FEATURES]], on=["station", "time"])
+    else:
+        statics = None
+        for f in STATICS_CSVS:
+            s = pd.read_csv(DATA / f)
+            statics = s if statics is None else statics.merge(s, on="station")
+        tab = tab.merge(statics, on="station")
+    return tab.dropna(), [f"p_{n}" for n in BASES[design]]
 
 
 @dataclass(frozen=True)
@@ -200,17 +210,20 @@ def main() -> None:
     ap.add_argument("--ensemble", type=int, default=4)
     ap.add_argument("--workers", type=int, default=9)
     ap.add_argument("--tag", default="nn_stack")
+    ap.add_argument("--gate-on", default="statics", choices=["statics", "regime"],
+                    help="condition the gate on WHERE (site statics) or WHEN (regime state)")
     a = ap.parse_args()
 
-    tab, pcols = build_table(a.design)
-    feats = [*(f for f in GATE_STATICS if f in tab.columns), *pcols]
+    tab, pcols = build_table(a.design, a.gate_on)
+    gate_feats = REGIME_FEATURES if a.gate_on == "regime" else GATE_STATICS
+    feats = [*(f for f in gate_feats if f in tab.columns), *pcols]
     dcfg = DataConfig(features=tuple(feats), scale="quantile", static=(), log1p=())
     train = TrainConfig(loss="nse", epochs=a.epochs, n_ensemble=a.ensemble, batch_size=4096,
                         lr=5e-3, input_noise=0.0, static_noise=0.0, device="cpu", amp=False,
                         patience=25)
     d = TabularData.from_frame(tab, dcfg)
-    print(f"stack[{a.design}]: {len(d)} rows, bases {pcols}, "
-          f"{len(feats) - len(pcols)} gate statics")
+    print(f"stack[{a.design}|{a.gate_on}]: {len(d)} rows, bases {pcols}, "
+          f"{len(feats) - len(pcols)} gate features")
     for name in pcols:                                   # baselines, same rows
         print(f"  base {name:<9} pooled NSE {metrics(tab[TARGET], tab[name])['nse']:+.3f}")
     print(f"  plain mean     pooled NSE {metrics(tab[TARGET], tab[pcols].mean(1))['nse']:+.3f}")

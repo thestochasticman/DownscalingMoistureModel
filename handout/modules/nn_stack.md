@@ -15,18 +15,28 @@ between models, never shift a site's level. Zero-initialised at the plain
 mean; fold-disciplined like everything here (the gate for a held-out site is
 trained only on other sites' out-of-fold base predictions).
 
-## Results: the gate loses to equal weighting
+## Results: every learned combiner loses to equal weighting
 
-| design (bases) | plain mean | gated stack |
+Four combiners of increasing restraint, all fold-disciplined
+([`run_stack_variants.py`](../run_stack_variants.py) for the linear two):
+
+| pooled NSE | station (4 bases) | block (3 bases) |
 |---|---|---|
-| station (hybrid, model8, mlp, seq) | **+0.450** pooled / r 0.675 | +0.439 / 0.666 |
-| block (hybrid, model8, model6) | **+0.401** / stn-med **+0.12** / blk-med **+0.38** | +0.360 / +0.00 / +0.29 |
+| **equal mean** | **+0.450** | **+0.401** |
+| gate on regime (when: doy, recent rain/P−PET/VPD) | +0.429 | +0.376 |
+| gate on statics (where: soil/terrain/aridity) | +0.439 | +0.360 |
+| global convex weights (3–4 params per fold) | +0.400 | +0.350 |
+| affine ridge (allowed to correct level) | +0.367 | +0.149 |
 
-Thirty-seven sites are too few to learn a *transferable* who-to-trust map —
-under the block design the gate is itself a spatial model and fails like one
-(it also failed to route hard enough to the hybrid at M7 against three bases
-that all fail there). Like [model5](model5.md) and [model10](model10.md),
-this page records the negative result so it is not re-attempted.
+The ordering is the finding. **Even three fitted numbers per fold lose**: the
+training rows systematically misestimate the held-out optimum (the blocked
+KYEAMBA fold drives model8's weight to 0.0; the weights chase whichever base
+looked good in-sample). Freeing the combiner to touch level (affine) is a
+disaster — vindicating the convexity constraint. Conditioning on regime
+rather than site is the least-bad learned variant, and still short. With 37
+sites the in-sample base ranking simply does not transfer; like
+[model5](model5.md) and [model10](model10.md), this page records the negative
+result — in its strongest form — so it is not re-attempted.
 
 ## What the exercise surfaced: base diversity
 

@@ -188,8 +188,13 @@ to equal weighting:
 | station (hybrid, model8, mlp, seq) | **+0.450** pooled | +0.439 |
 | block (hybrid, model8, model6) | **+0.401** pooled / stn-med **+0.12** / blk-med **+0.38** | +0.360 / +0.00 / +0.29 |
 
-Thirty-seven sites are too few to learn a transferable who-to-trust map; under
-the block design the gate is itself a spatial model and fails like one. What
+Three further variants complete the picture (`handout/run_stack_variants.py`,
+`--gate-on regime`): global convex weights (3–4 params/fold) +0.400/+0.350,
+an affine level-capable ridge +0.367/+0.149 (a disaster — the convexity
+constraint was protecting, not costing), and a regime-conditioned gate
+(doy + recent forcing) +0.429/+0.376 — the least-bad learned combiner, still
+short of the mean. Even three fitted numbers per fold lose: the in-sample
+base ranking does not transfer from 37 sites. What
 the exercise surfaced instead is that **base diversity is the win**: the plain
 mean over three (blocked) / four (station) validated models is the repo's best
 result under both designs — blocked +0.401 pooled, block-median +0.38, median
