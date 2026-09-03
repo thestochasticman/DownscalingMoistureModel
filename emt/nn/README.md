@@ -151,3 +151,28 @@ blocked; M7 −6.6 where every other model is −13 to −26). Station-wise vs
 model8: 12 wins / 20 losses — it fixes model8's worst failures (K2 +3.8,
 A5 +2.3, Y7 +0.8, K8 +0.7 NSE) and loses where model8 is already good.
 The two models' errors are again complementary.
+
+### Preprocessing attribution and the quantile result
+
+The scaling question ("are we normalising as well as we can?") turned out to be
+the lever. Hybrid, all three treatments, both designs:
+
+| variant | station pooled / stn>0 / median | block pooled / block-median / blocks>0 |
+|---|---|---|
+| z-score | +0.352 / 19 / +0.02 | +0.244 / +0.03 / 5 |
+| **quantile** | +0.346 / 18 / −0.05 | **+0.354 / +0.30 / 7** |
+| quantile + stratified weights | +0.376 / 17 / −0.19 | +0.249 / +0.22 / 5 |
+| model8 (weighted) | +0.408 / 20 / +0.13 | +0.322 / +0.25 / 7 |
+
+- **Quantile scaling of the 37-row statics is what fixed blocked transfer**
+  (+0.244 → +0.354, beating model8's +0.322): with rank-normalised inputs no
+  station's outlying soil/terrain value can drag the parameter MLP, so the
+  physics extrapolates. It also cut M7 — the repo's worst station, −13 to −26
+  under every earlier model — to −0.11 station-out / −1.1 blocked.
+- **The stratified weights are redundant under quantile scaling** (they help
+  only z-score, where they mask the same outlier problem) and hurt blocked
+  ADELONG (−1.07 vs +0.34).
+- **mean(hybrid-quantile, model8)** from the cached OOF predictions is the best
+  result in the repo under BOTH designs: station +0.421 / 20 / +0.15,
+  block +0.374 / block-median +0.38. The two models' errors are complementary;
+  the average beats each everywhere it matters.
