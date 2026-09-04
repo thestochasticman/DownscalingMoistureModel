@@ -64,9 +64,10 @@ then apply it. Each item links to a self-contained page.
 
 | # | Page | Output |
 |---|---|---|
-| 21 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field |
-| 22 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
-| 23 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
+| 26 | [Downscaling to 30 m](modules/downscale.py.md) | Per-pixel application → the 30 m field, and the three map paths |
+| 27 | [Use the model (`predict.py`)](modules/predict.py.md) | Clone-and-run tool: bbox + date → 30 m GeoTIFF |
+| 28 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
+| 29 | [Maps from the hybrid](modules/nn_hybrid.md#30-m-maps) | Per-pixel buckets, any date, no SMIPS — and nine dates for the price of one |
 
 ## The model
 

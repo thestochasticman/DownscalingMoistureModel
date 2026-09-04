@@ -69,6 +69,29 @@ parallel to the observations at a constant offset:
 
 ![nn-hybrid per-station held-out time series](../figures/nn_hybrid_per_station.png)
 
+## 30 m maps
+
+[`emt/nn/spatial.py`](../../emt/nn/spatial.py) gives the hybrid a map path,
+and it differs from [model8's](model8.md#run-it-for-any-date) in a way that
+follows from the model: model8 runs one water balance per ≈5 km forcing cell
+and adds 30 m structure through the readout offsets, whereas here the bucket
+*parameters* vary with the statics, so **every 30 m pixel gets its own
+bucket** — capacity, ET stress and recession from its own soil and terrain —
+forced by its nearest SILO cell. That mirrors how the model was trained
+(station statics, station forcing). No SMIPS, so any date works.
+
+```bash
+PYTHONPATH=. python -m emt.nn.spatial --bbox 147.30 -35.52 147.62 -35.10 \
+    --date 2008-08-05 -o field.tif
+```
+
+The bucket is sequential in time, so `snapshots=` reads any number of dates
+out of a single spin-up run — the nine-date
+[gallery](downscale.py.md#the-generated-product) costs one simulation, not
+nine (1.6 M pixel-buckets × 1070 days × 3 members in ~4 min on one GPU).
+The fitted model ships as `data/models/nn_hybrid_q.pt` (35 KB of tensors —
+no scikit-learn pickle to go stale).
+
 ## Reproduce
 
 ```bash
