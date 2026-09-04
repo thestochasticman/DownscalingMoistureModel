@@ -58,6 +58,12 @@ Data is cached under `data/` (gitignored; override with `EMT_DATA_DIR`).
 The trained model ships in the repo (`data/models/model6.joblib`), so you can
 produce a map for any Australian area and day **without retraining**:
 
+> ⚠️ That artefact was pickled by an older scikit-learn and fails to load on
+> 1.9.0 (`ModuleNotFoundError: No module named '_loss'`). Refit it once from
+> the cached feature table — seconds, no downloads — see
+> [compatibility](handout/modules/predict.py.md#compatibility-the-shipped-model6joblib-and-newer-scikit-learn).
+> The process-model artefacts and the neural checkpoints are unaffected.
+
 ```bash
 PYTHONPATH=. python -m emt.predict \
     --bbox 147.30 -35.52 147.62 -35.10 \

@@ -84,6 +84,53 @@ Network access, plus two free accounts in `~/.config/PaddockTS.json` (see
 nothing — terrain is read anonymously from its public AWS bucket
 (`AWS_NO_SIGN_REQUEST`, set by the module), so no AWS credentials are required.
 
+## Compatibility: the shipped `model6.joblib` and newer scikit-learn
+
+The committed artefact was pickled by an older scikit-learn and **fails to
+load on 1.9.0**:
+
+```
+joblib.load("data/models/model6.joblib")
+ModuleNotFoundError: No module named '_loss'
+```
+
+Boosting models pickle references to scikit-learn's internal Cython modules,
+whose import paths move between releases. The process-track artefacts are
+unaffected (`model8.joblib`, `model9.joblib` load fine — a `BucketEstimator`
+is plain Python, numpy and a handful of fitted coefficients), and so is the
+neural track, whose checkpoints are tensors plus dataclasses
+(`data/models/nn_hybrid_q.pt`).
+
+Until the artefact is re-pickled, refit it once from the **cached feature
+table** — seconds, and no downloads, because every column is already in
+`data/model6_features_2006_2010.csv`:
+
+```python
+import pandas as pd
+from emt.model6 import model as m6
+from emt.persist import fit_cached
+est = fit_cached(m6, pd.read_csv("data/model6_features_2006_2010.csv"), "model6_sk19")
+predict(bbox=..., day=..., model=est)          # pass it in via model=
+```
+
+## Which tool for which model
+
+`predict.py` wraps the *feature-based* ML track. The process and neural tracks
+have their own entry points, and they differ in what they need
+([three ways to make a map](downscale.py.md#three-ways-to-make-a-map)):
+
+| tool | model | needs SMIPS? | dates |
+|---|---|---|---|
+| `emt.predict` (this page) | model6 (and any `downscale()`-compatible fit) | **yes** | any day SMIPS covers |
+| [`emt.model8.predict`](model8.md#run-it-for-any-date) | model7–9 | no | any date, point series or map |
+| [`emt.nn.spatial`](nn_hybrid.md#30-m-maps) | nn-hybrid | no | any date; many dates per run |
+
+Note that the branch's best-scoring configuration is an **ensemble** of these
+(blocked NSE +0.42 — see [nn-stack](nn_stack.md)), and there is no single-call
+wrapper for it yet: the gallery script
+[`plot_downscale_gallery_best.py`](../plot_downscale_gallery_best.py) shows how
+the members are combined on a grid.
+
 ## Caveat: Murrumbidgee-trained, unvalidated elsewhere
 
 The shipped model is trained and validated only in the Murrumbidgee catchment. A
