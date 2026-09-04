@@ -55,14 +55,23 @@ Data is cached under `data/` (gitignored; override with `EMT_DATA_DIR`).
 
 ## Quick start — make a 30 m map
 
-The trained model ships in the repo (`data/models/model6.joblib`), so you can
-produce a map for any Australian area and day **without retraining**:
+Three fitted models ship in the repo, and none of them needs retraining. The
+two that need **no SMIPS** run forward from a spin-up to *any* date:
 
-> ⚠️ That artefact was pickled by an older scikit-learn and fails to load on
-> 1.9.0 (`ModuleNotFoundError: No module named '_loss'`). Refit it once from
-> the cached feature table — seconds, no downloads — see
-> [compatibility](handout/modules/predict.py.md#compatibility-the-shipped-model6joblib-and-newer-scikit-learn).
-> The process-model artefacts and the neural checkpoints are unaffected.
+```bash
+# the differentiable bucket (nn-hybrid) -- best single-model blocked transfer
+PYTHONPATH=. python -m emt.nn.spatial \
+    --bbox 147.30 -35.52 147.62 -35.10 --date 2008-08-05 -o field.tif
+
+# the process model (model8) -- point series or 30 m map
+PYTHONPATH=. python -m emt.model8.predict --lat -35.05 --lon 147.5 \
+    --start 2025-06-01 --end 2025-06-10                       # daily series
+PYTHONPATH=. python -m emt.model8.predict \
+    --bbox 147.30 -35.52 147.62 -35.10 --date 2024-09-15      # 30 m map
+```
+
+The ML-track tool downscales the SMIPS product instead, so it needs SMIPS for
+the day plus a year of lookback:
 
 ```bash
 PYTHONPATH=. python -m emt.predict \
@@ -72,28 +81,21 @@ PYTHONPATH=. python -m emt.predict \
 # (-o PATH writes an extra copy elsewhere; --no-plot skips the PNG)
 ```
 
-or from Python:
+> ⚠️ Its shipped artefact `data/models/model6.joblib` was pickled by an older
+> scikit-learn and **fails to load on 1.9.0**
+> (`ModuleNotFoundError: No module named '_loss'`). Refit it once from the
+> cached feature table — seconds, no downloads — see
+> [compatibility](handout/modules/predict.py.md#compatibility-the-shipped-model6joblib-and-newer-scikit-learn).
+> The process-model artefacts and the neural checkpoint are unaffected.
 
-```python
-from emt.predict import predict
-ds = predict(bbox=(147.30, -35.52, 147.62, -35.10), day="2008-07-31")
-ds["sm_pred"]                                              # 30 m soil moisture (%)
-# (predict() also saves the tif + png into the AOI's query dir; ds.attrs has the paths)
-```
-
-`--bbox` is `W S E N` in EPSG:4326. A first run over a new area fetches ~a year of
-SMIPS and SILO (a few minutes), cached for later days. See
-[`handout/modules/predict.py.md`](handout/modules/predict.py.md) for full details.
-
-The process model ships too, and needs no SMIPS — it runs forward from a
-spin-up to **any date**, as a point series or a 30 m map:
-
-```bash
-PYTHONPATH=. python -m emt.model8.predict --lat -35.05 --lon 147.5 \
-    --start 2025-06-01 --end 2025-06-10                       # daily series
-PYTHONPATH=. python -m emt.model8.predict \
-    --bbox 147.30 -35.52 147.62 -35.10 --date 2024-09-15      # 30 m map
-```
+`--bbox` is `W S E N` in EPSG:4326. A first run over a new area fetches its
+covariates (a few minutes), cached for later days. Which tool suits which job
+is tabulated in
+[`predict.py.md`](handout/modules/predict.py.md#which-tool-for-which-model);
+note the branch's best-scoring configuration is an **ensemble** of these
+models, which has no single-call wrapper yet — see
+[`plot_downscale_gallery_best.py`](handout/plot_downscale_gallery_best.py) for
+how the members are combined.
 
 > ⚠️ The shipped model is trained and validated **only** in the Murrumbidgee
 > catchment. Run elsewhere and it still produces a field, but with an uncorrected
@@ -122,6 +124,12 @@ emt/
   model8/           the full-stack process model (soil+terrain+aridity offsets,
                     AWC capacity, stratified weights); model8/predict.py runs it
                     for any date (point series or 30 m map), no SMIPS needed
+  model9/, model10/ pedotransfer readout; bucket storage as an ML feature
+  nn/               the neural-network track (PyTorch): an MLP on model6's
+                    features, a Transformer over the SILO forcing window, and
+                    the differentiable model7 bucket whose parameters come from
+                    the statics; nn/cv.py runs the same validation ladder,
+                    nn/spatial.py makes 30 m maps (per-pixel buckets, any date)
   persist.py        fit-once model + out-of-fold prediction caching
   downscale.py      model-agnostic per-pixel application → 30 m field
   predict.py        clone-and-run inference tool (Python function + CLI)
@@ -150,41 +158,54 @@ NSE +0.41 (parity with model6) and clearly better spatial *transfer*
 (blocked NSE +0.32 vs a pre-stack +0.22). `persist.py` caches fits and out-of-fold
 predictions so figures rebuild in seconds.
 
-**3 · Apply.** `downscale.py` applies a fitted model per 30 m pixel over an AOI
-for a day; `predict.py` wraps it into the clone-and-run tool above, fetching every
-covariate and loading the shipped model. Every SMIPS/soil/weather feature is
+**3 · Apply.** Three paths reach 30 m: `downscale.py` applies a *feature-based*
+fit per pixel (wrapped by `predict.py`, which fetches every covariate — needs
+SMIPS); `model8/predict.py` runs the bucket forward per ≈5 km forcing cell for
+any date; and `nn/spatial.py` gives every 30 m pixel its own bucket, with
+`snapshots=` reading many dates out of one simulation
+([three ways to make a map](handout/modules/downscale.py.md#three-ways-to-make-a-map)). Every SMIPS/soil/weather feature is
 strictly **backward-looking** (as of the prediction day) — no feature can see the
 future.
 
 ## Results (snapshot)
 
-Recommended model **`model6`**, 36-station leave-site-out, 2006–2010:
+37 stations, 2006–2010, out-of-fold under two designs: **station-out** (hold
+out one station — interpolation beside instrumented sites) and **blocked**
+(hold out whole spatially independent districts — the honest test for a
+national product).
 
-| Metric | model6 |
-|---|---|
-| Pooled NSE / r | **+0.38 / 0.62** |
-| Per-station NSE > 0 | 16 / 36 |
-| Median per-station \|bias\| | 3.85 % |
+The last three columns are all from the **blocked** design, so they compare
+like with like:
 
-The model tracks moisture **dynamics** well (median per-station r 0.81) but carries
-a per-station **level** bias (median per-station NSE −0.19) — it is a working
-model, **not** a finished product. These are also *station-out* figures, i.e.
-interpolation next to instrumented sites; under **blocked validation** (whole
-spatially independent site-groups held out — the honest test for a national
-product) the shipped model8 transfers at pooled NSE ≈ +0.32 and model6's
-block-median falls to +0.09, with failures concentrated at the edges of the training climate range
-(see
-[blocked validation](handout/modules/blocked_validation.md)).
+| | station-out NSE | blocked NSE | blocked stations NSE > 0 | blocked blocks NSE > 0 |
+|---|---|---|---|---|
+| **Ensemble (recommended)** | **+0.48** | **+0.42** | **22 / 37** | **8 / 9** |
+| nn-hybrid + SMIPS level anchor | +0.39 | +0.34 | 19 / 37 | 6 / 9 |
+| nn-hybrid (differentiable bucket) | +0.35 | +0.35 | 18 / 37 | 7 / 9 |
+| nn-transformer (scaled, no SMIPS) | +0.43 | +0.22 | 16 / 37 | 5 / 9 |
+| model8 (process, previous best) | +0.41 | +0.32 | 20 / 37 | 7 / 9 |
+| model6 (ML track) | +0.38¹ | +0.36 | 15 / 37 | 5 / 9 |
 
-**Branch `neural-networks` moves both headlines.** A differentiable-bucket
-model with rank-normalised statics beats model8 on blocked transfer (+0.35),
-a SMIPS climatological level anchor gives the most stations-positive of any
-single model (21/37), and robust ensembles over the model families reach
-**blocked pooled NSE +0.42 (8/9 blocks, 22/37 stations positive) and
-station-out +0.48** — see the
-[neural-network track](handout/modules/nn_mlp.md) (handout pages 20–23).
-The full story, including an earlier evaluation leak that was found and
-corrected, is in the [handout](handout/README.md).
+<sup>¹ model6's published station-out figure is the 36-station one; every
+other number in the table is the 37-station run on this branch.</sup>
+
+The ensemble is a plain median/mean over the model families — every *trained*
+combiner tested lost to equal weighting
+([nn-stack](handout/modules/nn_stack.md)).
+
+**What still limits it is level, not dynamics.** Median per-station
+correlation is 0.82, but roughly 60 % of per-station mean-squared error is a
+constant offset; removing each station's mean — an oracle bound, not
+achievable — would take the median per-station NSE to ≈ +0.6 with nearly every
+station positive. Level at an unobserved site needs *information* (a satellite
+anchor such as ESA CCI), not a better estimator: capacity does not buy it
+(scaling the Transformer moved station-out +0.36 → +0.43 and blocked not at
+all), and neither does a learned combiner.
+
+These are Murrumbidgee numbers. The full story — every model, the validation
+ladder, an evaluation leak that was found and corrected, and the negative
+results — is in the [handout](handout/README.md); the neural-network track is
+handout pages 20–23.
 
 ![Neural-network track results: ensemble fit, per-station NSE against model8, blocked per-block NSE, and the preprocessing attribution](handout/figures/nn_track_results.png)
 
