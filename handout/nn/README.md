@@ -184,6 +184,19 @@ leakage-safe — gives the most stations-positive of any single model:
 **+0.387 station-out, 21 / 37 positive, median |bias| 3.17 %**, against
 +0.346 / 18 / −0.05 without it.
 
+> ⚠️ **The anchor's numbers are an upper bound.** The site mean is computed
+> over the whole 2006–2010 study window, so it contains information from days
+> after the ones being predicted. This is the same construct the repository
+> already identified and removed as a look-ahead leak (`smips_mean_px`, the
+> full-period per-pixel SMIPS climatology). It leaks no *in-situ* observation —
+> only future SMIPS — and for a reanalysis product built from a complete
+> archive it is arguably legitimate; but by this repository's own standard it
+> is a leak, and the honest version computes the climatology from a window
+> strictly **prior** to the prediction period. Until that is run, treat
+> +0.387 station-out and +0.332 block×year as optimistic. The unanchored
+> hybrid (+0.346 / +0.267) and every other model in these tables are
+> unaffected.
+
 There is a subtlety worth recording. Pooled, the SMIPS site mean correlates
 with the true site mean at only **0.34** — but *within* aridity terciles at
 **0.38 / 0.44 / 0.61** (dry / mid / wet). It is a Simpson's-paradox signal: the

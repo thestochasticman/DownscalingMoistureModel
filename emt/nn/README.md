@@ -140,6 +140,12 @@ Single models (station-out pooled / blocked pooled):
 | **nn-seq scaled (d=128, 4L, 3-member)** | same | **+0.431** | +0.221 | best single-net interpolation, median r 0.83; scale buys no transfer |
 | **nn-hybrid (quantile statics)** | forcing + statics, enforced bucket | +0.346 | **+0.354** | first model to beat model8 blocked; M7 −0.11 |
 | nn-hybrid + SMIPS anchor (`--anchor`) | + site SMIPS climatological mean | **+0.387** | +0.339 | **21/37 stn>0, most of any single model**; anchor transfers only partially |
+
+> ⚠️ The anchor's site mean is computed over the whole 2006–2010 window, so it
+> sees days after those being predicted — the same construct the repo removed as
+> a look-ahead leak (`smips_mean_px`). No in-situ observation leaks, only future
+> SMIPS; treat its two numbers as an upper bound until the climatology is
+> recomputed from a strictly prior window. No other row is affected.
 | model6 / model8 / model9 (baselines) | | +0.38 / +0.408 / — | +0.355 / +0.322 / +0.35 | model9 rescued as an ensemble base |
 
 Every model's residual is dominated by per-station LEVEL, not dynamics

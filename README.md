@@ -180,7 +180,7 @@ like with like:
 | | station-out NSE | blocked NSE | blocked stations NSE > 0 | blocked blocks NSE > 0 |
 |---|---|---|---|---|
 | **Ensemble (recommended)** | **+0.48** | **+0.42** | **22 / 37** | **8 / 9** |
-| nn-hybrid + SMIPS level anchor | +0.39 | +0.34 | 19 / 37 | 6 / 9 |
+| nn-hybrid + SMIPS level anchor² | +0.39 | +0.34 | 19 / 37 | 6 / 9 |
 | nn-hybrid (differentiable bucket) | +0.35 | +0.35 | 18 / 37 | 7 / 9 |
 | nn-transformer (scaled, no SMIPS) | +0.43 | +0.22 | 16 / 37 | 5 / 9 |
 | model8 (process, previous best) | +0.41 | +0.32 | 20 / 37 | 7 / 9 |
@@ -188,6 +188,10 @@ like with like:
 
 <sup>¹ model6's published station-out figure is the 36-station one; every
 other number in the table is the 37-station run on this branch.</sup>
+
+<sup>² the anchor's climatology is computed over the full study window, so its
+two numbers are an upper bound — see
+[the caveat](handout/nn/README.md#44-the-level-term-needs-an-observation-not-a-better-estimator).</sup>
 
 The ensemble is a plain median/mean over the model families — every *trained*
 combiner tested lost to equal weighting

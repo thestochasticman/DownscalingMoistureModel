@@ -233,8 +233,12 @@ def main() -> None:
     ap.add_argument("--scale", default="zscore", choices=["zscore", "robust", "quantile"])
     ap.add_argument("--anchor", action="store_true",
                     help="add each site's SMIPS climatological mean as a static -- a "
-                         "measurement-based LEVEL observation (independent of OzNet, so "
-                         "leakage-safe; from data/model6_features_2006_2010.csv)")
+                         "measurement-based LEVEL observation, independent of OzNet. NOTE: "
+                         "the mean is taken over the WHOLE 2006-2010 window, so it sees days "
+                         "after those predicted -- the same construct removed elsewhere in "
+                         "this repo as a look-ahead leak (smips_mean_px). No in-situ label "
+                         "leaks, only future SMIPS; results with --anchor are an upper bound "
+                         "until the climatology is rebuilt from a strictly prior window.")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--weighted", action="store_true",
                     help="model8's stratified training weights (per training fold)")
