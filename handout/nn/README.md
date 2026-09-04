@@ -84,6 +84,46 @@ Reading the table:
 against model8; (c) blocked per-block NSE, model6 → ensemble; (d) what the
 statics preprocessing was worth.</sup>
 
+## 3b. The full ladder — and what the rungs mean
+
+With the year and block×year rungs now run, the neural models can be placed
+beside the others on all four designs (pooled NSE, out-of-fold):
+
+| model | year | station | block | block×year |
+|---|---|---|---|---|
+| nn-hybrid (quantile) | **+0.554** | +0.346 | **+0.354** | +0.267 |
+| nn-hybrid + SMIPS anchor | +0.550 | +0.387 | +0.339 | +0.332 |
+| model8 (weighted) | +0.475 | **+0.408** | +0.322 | +0.273 |
+| model9 | +0.447 | +0.397 | +0.347 | +0.323 |
+| model6 | +0.771 | — | +0.355 | +0.340 |
+| model10 | — | — | +0.367 | **+0.345** |
+
+Three things fall out of this table that the two-rung view could not show.
+
+**The gap between rungs is the level term, measured.** The same hybrid scores
++0.554 when it has seen the site (a different year held out) and +0.354 when it
+has not (a district held out). Under year-out its median per-station |bias|
+falls to 1.99 pp and **M7 turns positive (+0.28)** — the station that sits at
+−13 to −26 under every other design and model. Nothing about the physics or the
+parameters changed between those two numbers; only whether the site's own
+level was learnable. That 0.20 NSE is the prize the level work is chasing.
+
+**The SMIPS anchor pays exactly where theory says it should.** It is worth
++0.041 station-out and **+0.065 on block×year** — the designs where site level
+is unknown — and **nothing at all under year-out** (+0.550 vs +0.554), where
+the site's own other years already supply it. A level correction that only
+helps when level is missing is the behaviour you want, and it is a second,
+independent confirmation of the diagnosis.
+
+**No model wins everywhere, and the ordering flips with the design.** model6 —
+the SMIPS-fed ML model — is far ahead on the temporal axis (+0.771 year), where
+the coarse product tells it what this particular year is doing; the hybrid
+leads the spatial axis. This is the repository's own thesis restated with new
+models: *validation design changes the answer more than the choice of model*,
+so a single headline number is not a description of a model's skill. It is also
+the mechanism behind the ensemble — models that lead on different rungs are
+models whose errors are uncorrelated.
+
 ## 4. Five findings
 
 ### 4.1 Eleven of the 25 tabular features are station constants — and a net will use them as an ID

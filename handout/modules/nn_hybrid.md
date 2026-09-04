@@ -69,6 +69,21 @@ parallel to the observations at a constant offset:
 
 ![nn-hybrid per-station held-out time series](../figures/nn_hybrid_per_station.png)
 
+## The full ladder
+
+| design | held out | nn-hybrid | + SMIPS anchor | model8 |
+|---|---|---|---|---|
+| year | a calendar year | **+0.554** | +0.550 | +0.475 |
+| station | one station | +0.346 | +0.387 | **+0.408** |
+| block | a district | **+0.354** | +0.339 | +0.322 |
+| block×year | a district *and* a year | +0.267 | +0.332 | +0.273 |
+
+Year-out is the diagnostic rung: with the site itself in training the median
+per-station |bias| falls to 1.99 pp and even M7 turns positive (+0.28). The
+0.20 NSE between year-out and block-out is the site-level term, isolated —
+same model, same physics, only the site's own level unknown. The anchor
+tracks that exactly: +0.065 on block×year, nothing under year-out.
+
 ## 30 m maps
 
 [`emt/nn/spatial.py`](../../emt/nn/spatial.py) gives the hybrid a map path,
