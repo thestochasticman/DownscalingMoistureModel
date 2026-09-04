@@ -74,6 +74,42 @@ view; compare the same grid on the [model8](model8.md) and
 
 ![recommended ensemble per-station held-out time series](../figures/nn_ens_per_station.png)
 
+### Is the ensemble itself selected on the folds it is reported on?
+
+Yes, partly — so it was checked properly
+([`run_ensemble_nested.py`](../run_ensemble_nested.py)). The recommended pick
+had its membership and its aggregation chosen by looking at blocked results,
+then was reported on those same blocked folds. The honest version selects the
+configuration **inside** each fold: for held-out block *B*, choose among all
+114 candidate configurations using only the other eight blocks, then apply the
+winner to *B*.
+
+| blocked | pooled | stations > 0 | blocks > 0 | block-median |
+|---|---|---|---|---|
+| nested selection, inner criterion = pooled | +0.345 | 18/37 | 6/9 | +0.21 |
+| nested selection, inner criterion = block-median | +0.383 | 20/37 | 6/9 | +0.20 |
+| **median of *all six* bases — no selection at all** | **+0.416** | 20/37 | 7/9 | +0.38 |
+| reported fixed pick, median(hyb, hybA, m8, m6, m9) | +0.417 | 22/37 | 8/9 | +0.42 |
+
+**Selecting the configuration per fold is worse than not selecting at all** —
+and the configurations chosen are unstable (seven distinct across nine folds).
+This is §4.5 one level up: choosing among ensembles from eight blocks fails
+for the same reason choosing weights from 37 stations fails.
+
+The load-bearing row is the third. A rule with **no free choices whatsoever** —
+take the median of every validated base — scores +0.416, within 0.001 of the
+tuned pick. So the headline is *not* an artefact of selection: the bulk of it
+survives with nothing chosen on the reported folds. The tuned pick's remaining
+edge (one extra block and station-count, +0.05 block-median) is the part that
+should be treated as optimistic, and the parameter-free median is what to
+quote when the claim has to be unimpeachable. The same holds station-out:
+mean of all six bases +0.470 against the tuned +0.483.
+
+One residual caveat, recorded rather than hidden: the inner selection scores
+candidates on other blocks' out-of-fold rows, whose base models did see the
+held-out block during their own training. Removing that too would need every
+base re-run under a double hold-out.
+
 ### Does each member earn its seat?
 
 The blocked pick keeps [model6](model6.md) even though model6's *solo*

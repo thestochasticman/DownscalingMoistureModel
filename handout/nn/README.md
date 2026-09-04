@@ -219,6 +219,15 @@ which vindicates constraining the gate to a convex combination. Under blocked
 validation a gate conditioned on site statics is itself a spatial model, and
 fails like one.
 
+The same thing happens one level up, when the *ensemble configuration itself*
+is chosen per fold rather than fixed
+([`run_ensemble_nested.py`](../run_ensemble_nested.py)): nested selection
+scores +0.345 to +0.383 blocked, against **+0.416 for the median of all six
+bases with nothing chosen at all**. Choosing among ensembles from eight blocks
+fails exactly as choosing weights from 37 stations does — and it means the
++0.42 headline is not a selection artefact, since a rule with no free choices
+lands within 0.001 of it.
+
 What the exercise produced instead is the recommended configuration: **a plain
 median over diverse, individually-disciplined models**, zero trained
 parameters. Diversity is doing the work — model6 earns its place in the
