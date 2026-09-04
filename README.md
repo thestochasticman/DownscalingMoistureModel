@@ -186,4 +186,10 @@ station-out +0.48** — see the
 The full story, including an earlier evaluation leak that was found and
 corrected, is in the [handout](handout/README.md).
 
-![model6 leave-site-out results](handout/figures/model6_results.png)
+![Neural-network track results: ensemble fit, per-station NSE against model8, blocked per-block NSE, and the preprocessing attribution](handout/figures/nn_track_results.png)
+
+<sup>(a) the recommended ensemble's leave-station-out fit; (b) per-station NSE,
+ensemble against model8; (c) blocked per-block NSE from model6 through to the
+ensemble — the honest transfer test; (d) what the statics preprocessing was
+worth. model6's own results figure is on its
+[model page](handout/modules/model6.md).</sup>
