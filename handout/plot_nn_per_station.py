@@ -27,6 +27,8 @@ MODELS = {  # key: (predictions csv, figure, title prefix)
             "nn-transformer (365-day SILO forcing window, no SMIPS)"),
     "hybrid": ("nn_hybrid_q_stationcv_predictions.csv", "nn_hybrid_per_station.png",
                "nn-hybrid (differentiable bucket, quantile statics)"),
+    "ens": ("nn_ens_stationcv_predictions.csv", "nn_ens_per_station.png",
+            "recommended ensemble: mean(nn-hybrid+anchor, model8, scaled Transformer)"),
 }
 
 tab = pd.read_csv(REPO / "data" / "process_target_2006_2010.csv")

@@ -26,8 +26,14 @@ lifts the low-variance dry sites to parity at no pooled cost.
 
 ## Results — leave-station-out (37 stations, 2006–2010)
 
+The same-features ladder, so the estimator is the only variable: the
+[model1 Random Forest](model1.md) baseline scored pooled **+0.15** on this
+feature set and [model6](model6.md)'s tuned boosting **+0.38**; the MLP's job
+was to find where a net sits between them.
+
 | configuration | pooled NSE | stations NSE>0 | median stn NSE | median r |
 |---|---|---|---|---|
+| model1 · Random Forest (baseline, same features) | +0.15 | | | |
 | MSE loss, z-score | +0.303 | 14/37 | −0.48 | 0.77 |
 | NSE\* loss, z-score | +0.329 | 12/37 | −0.49 | 0.78 |
 | + log1p on heavy tails | +0.288 | 15/37 | −0.35 | 0.78 |

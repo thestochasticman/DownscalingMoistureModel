@@ -63,9 +63,23 @@ combination, so the numbers are not subset-selection artefacts. Equal-weight
 (or median) combination over diverse, individually-disciplined models is the
 recommended product configuration.
 
+The recommended configurations as figures — (a)/(b) the station ensemble
+against model8, (c) the blocked ladder ending at the median-of-5:
+
+![nn-track results](../figures/nn_track_results.png)
+
+And the station ensemble's held-out series at every station — the product
+view; compare the same grid on the [model8](model8.md) and
+[nn-hybrid](nn_hybrid.md) pages:
+
+![recommended ensemble per-station held-out time series](../figures/nn_ens_per_station.png)
+
 ## Reproduce
 
 ```bash
+# the learned combiners (negative result)
 PYTHONPATH=. python -m emt.nn.stack cv --design block  --workers 9
 PYTHONPATH=. python -m emt.nn.stack cv --design station --workers 12
+# the recommended ensembles are plain aggregation of the cached OOF
+# predictions -- see emt/nn/README.md "Current standings" for the recipes
 ```

@@ -1,8 +1,9 @@
 """nn-track 4-panel results figure, from cached CV predictions.
 
-(a) hybrid leave-site-out fit; (b) per-station NSE, hybrid vs model8, both
-harnesses' recommended configs; (c) blocked per-block NSE across the
-candidates; (d) preprocessing attribution (the quantile result). Reads only
+(a) the recommended station ensemble's leave-site-out fit; (b) per-station
+NSE, ensemble vs model8 (the strongest single model); (c) blocked per-block
+NSE from the RF-era reference through to the recommended blocked ensemble;
+(d) preprocessing attribution on the hybrid (the quantile result). Reads only
 data/*_predictions.csv; nothing retrains.
 
 Run from repo root::  PYTHONPATH=. python handout/plot_nn_results.py
@@ -44,22 +45,22 @@ def per_block(p):
              .apply(lambda g: pd.Series(metrics(g[TARGET], g["pred"])), include_groups=False))
 
 
-hyb_s = load("nn_hybrid_q_stationcv_predictions.csv")
+ens_s = load("nn_ens_stationcv_predictions.csv")     # mean(hybrid+anchor, model8, seq-big)
 m8_s = load("model8_losocv_capacity_aridity_weighted_predictions.csv")
-hyb_s["site"] = hyb_s["station"].map(site_of)
-ps_h, ps_8 = per_site(hyb_s), per_site(m8_s)
-pooled = metrics(hyb_s[TARGET], hyb_s["pred"])
+ens_s["site"] = ens_s["station"].map(site_of)
+ps_h, ps_8 = per_site(ens_s), per_site(m8_s)
+pooled = metrics(ens_s[TARGET], ens_s["pred"])
 
 fig, ax = plt.subplots(2, 2, figsize=(15, 11))
 
 # (a) LOSO fit
 for s in SITES:
-    d = hyb_s[hyb_s.site == s]
+    d = ens_s[ens_s.site == s]
     ax[0, 0].scatter(d[TARGET], d["pred"], s=6, alpha=.25, color=SITE_COLOR[s], label=s)
 lim = [0, 55]
 ax[0, 0].plot(lim, lim, "k--", lw=1)
 ax[0, 0].set(xlim=lim, ylim=lim, xlabel="observed root-zone (%)", ylabel="held-out predicted (%)",
-             title=f"(a) nn-hybrid leave-site-out fit  (pooled NSE {pooled['nse']:+.2f}, r {pooled['r']:.2f})")
+             title=f"(a) recommended ensemble, leave-site-out fit  (pooled NSE {pooled['nse']:+.2f}, r {pooled['r']:.2f})")
 leg = ax[0, 0].legend(fontsize=9, markerscale=2)
 for lh in leg.legend_handles:
     lh.set_alpha(1)
@@ -71,14 +72,14 @@ y = np.arange(len(order))
 ax[0, 1].scatter(ps_8.loc[order, "nse"].clip(-3), y, s=22, color="0.45", label="model8 (grey)", zorder=3)
 ax[0, 1].scatter(ps_h.loc[order, "nse"].clip(-3), y, s=22,
                  color=[SITE_COLOR[site_of[s]] for s in order], zorder=4,
-                 edgecolors="k", linewidths=0.4, label="nn-hybrid (site colour)")
+                 edgecolors="k", linewidths=0.4, label="ensemble (site colour)")
 for i, s in enumerate(order):
     ax[0, 1].plot([ps_8.loc[s, "nse"].clip(-3), ps_h.loc[s, "nse"].clip(-3)], [i, i],
                   color="0.8", lw=1, zorder=2)
 ax[0, 1].axvline(0, color="k", lw=0.8)
 ax[0, 1].set_yticks(y, order, fontsize=7)
 ax[0, 1].set(xlabel="held-out per-station NSE (clipped at -3)",
-             title="(b) per-station NSE: nn-hybrid (site colour) vs model8 (grey)")
+             title="(b) per-station NSE: recommended ensemble (site colour) vs model8 (grey)")
 ax[0, 1].legend(fontsize=9, loc="lower right")
 ax[0, 1].grid(alpha=.3)
 
@@ -87,6 +88,7 @@ cands = {
     "model6": "model6_blockcv_predictions.csv",
     "model8 (weighted)": "model8_blockcv_capacity_aridity_weighted_predictions.csv",
     "nn-hybrid (quantile)": "nn_hybrid_q_blockcv_predictions.csv",
+    "ensemble (median of 5)": "nn_ens_blockcv_predictions.csv",
 }
 blocks = None
 rows = {}
@@ -94,11 +96,6 @@ for name, f in cands.items():
     pb = per_block(load(f))["nse"]
     blocks = pb.index if blocks is None else blocks
     rows[name] = pb
-ens = load("nn_hybrid_q_blockcv_predictions.csv").set_index(["station", "time"])
-m8b = load("model8_blockcv_capacity_aridity_weighted_predictions.csv").set_index(["station", "time"])
-j = ens.join(m8b["pred"], rsuffix="_m8").dropna(subset=["pred", "pred_m8"]).reset_index()
-j["pred"] = (j["pred"] + j["pred_m8"]) / 2
-rows["mean(hybrid, model8)"] = per_block(j)["nse"]
 x = np.arange(len(blocks))
 w = 0.2
 colors = ["0.7", "0.45", "#d62728", "#1f77b4"]

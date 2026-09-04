@@ -56,6 +56,11 @@ by district (within-aridity-tercile correlation with the true site mean is
 0.38–0.61, pooled only 0.34), so the learned correction transfers partially.
 Both variants earn ensemble seats ([nn-stack](nn_stack.md)).
 
+The track results figure (shared with [nn-stack](nn_stack.md)): panels (a)
+and (b) show the **recommended ensemble** — the best configuration available —
+against model8; panel (c) the blocked ladder from model6 to the blocked
+ensemble; panel (d) this page's preprocessing attribution:
+
 ![nn-track results](../figures/nn_track_results.png)
 
 Held-out series for every station — compare the same figure on the
