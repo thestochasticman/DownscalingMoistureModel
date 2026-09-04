@@ -94,6 +94,22 @@ same diversity argument as above — model6 is the only member that is pure-ML
 and SMIPS-fed, so its errors are the least correlated with the four
 process-track members.
 
+### What it looks like on the ground
+
+The point of the whole exercise: the coarse product as delivered, beside the
+30 m field the ensemble generates over the same ground on the same day
+([`plot_downscale_pair_best.py`](../plot_downscale_pair_best.py) — the median
+of model6, model8, model9 and [nn-hybrid](nn_hybrid.md), the mappable members
+of the blocked pick):
+
+![Coarse SMIPS beside the 30 m field the ensemble generates](../figures/downscale_pair_single.png)
+
+Both panels agree on the large dry patch in the north-west — the coarse field
+is not being contradicted, it is being resolved: the 30 m panel carries the
+drainage network and hillslope contrast that a ≈1 km cell averages away. The
+units differ because they are different quantities (SMIPS `TotalBucket` is
+profile soil water in mm; the model predicts root-zone volumetric %).
+
 ## Reproduce
 
 ```bash
