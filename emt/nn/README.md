@@ -116,87 +116,64 @@ only to look up σ; it is never a network input.
   DataLoader is the bottleneck; per-step overhead means batch 1024–2048 is
   5× faster per epoch than 512 with no skill cost.
 
-## Results so far (leave-station-out, 2006–2010, 37 stations, common 47,786 rows)
+## Current standings (out-of-fold, 37 stations, 2006–2010)
 
-| model | inputs | pooled NSE | stn > 0 | median stn NSE | median r | oracle de-biased median |
-|---|---|---|---|---|---|---|
-| nn-mlp (z-score only) | SMIPS + statics + antecedent | +0.329 | 12 | −0.49 | 0.78 | +0.57 |
-| nn-mlp B (log1p + static noise) | same | +0.379 | 17 | −0.33 | 0.79 | +0.51 |
-| nn-seq Transformer (NSE\*, L=365, 2-member) | SILO forcing window + statics, **no SMIPS** | +0.355 | 15 | −0.64 | 0.77 | +0.53 |
-| model6 (boosting) | as nn-mlp | +0.38 | 16/36 | | 0.81 | |
-| model8 (process bucket) | as nn-seq | +0.412 | 19 | +0.13 | 0.82 | +0.60 |
+The recommended configurations, membership decided only by each base's own
+validation (blocked pool: bases with blocked pooled ≥ +0.3), median for the
+blocked design, mean for station:
 
-The Transformer reaches the MLP's level **without SMIPS** — the same inputs as
-model8 — and is the first NN to fix some of the worst level outliers
-(Y7 −7.5 → +0.01, K12 −12.5 → −8.2, K8 −3.4 → −0.4, A4 −0.5 → +0.86). It loses
-elsewhere (A3, K1, K4, A5) and is 17 wins / 15 losses per station against the
-MLP. It is still short of model8, and the deficit is still level: median 66 %
-of station MSE is bias; de-biased it is +0.53. Its water balance is learned;
-model8's is enforced.
+| | pooled NSE | stations > 0 | stn median | blocks > 0 | block-median |
+|---|---|---|---|---|---|
+| **blocked: median(hyb, hybA, m8, m6, m9)** | **+0.417** | **22/37** | +0.11 | **8/9** | **+0.42** |
+| **station: mean(hybA, m8, seq-big)** | **+0.483** | 21/37 | +0.16 | 8/9 | +0.38 |
+| station: mean(hyb, m8, seq-big) | +0.474 | 21/37 | **+0.23** | 8/9 | +0.31 |
+| best single, blocked: nn-hybrid (quantile) | +0.354 | 18/37 | −0.05 | 7/9 | +0.30 |
+| best single, station: scaled Transformer | +0.431 | 17/37 | −0.07 | | |
+| repo baseline (model8, blocked / station) | +0.322 / +0.408 | 20/37 | +0.07 / +0.13 | 7/9 | +0.25 |
 
-### Hybrid (differentiable bucket) results
+Single models (station-out pooled / blocked pooled):
 
-| design | model | pooled NSE | stn > 0 | median stn NSE | median \|bias\| | de-biased median |
-|---|---|---|---|---|---|---|
-| station | **hybrid** | +0.352 | 19/37 | **+0.02** | **3.34** | +0.54 |
-| station | model8 | +0.408 | 20/37 | +0.13 | 3.57 | +0.61 |
-| block | **hybrid** | +0.244 | 18/37 | −0.00 | 3.83 | +0.54 |
-| block | model8 (weighted) | +0.322 | 20/37 | +0.07 | 3.17 | +0.60 |
+| model | inputs | station | blocked | note |
+|---|---|---|---|---|
+| nn-mlp (log1p + static noise 0.3σ) | model6's features (SMIPS) | +0.379 | +0.170 | static noise is the lever (12→17 stn>0); worst transfer |
+| nn-seq small (d=64, 3L) | SILO window + statics, no SMIPS | +0.355 | +0.217 | matches the MLP without SMIPS |
+| **nn-seq scaled (d=128, 4L, 3-member)** | same | **+0.431** | +0.221 | best single-net interpolation, median r 0.83; scale buys no transfer |
+| **nn-hybrid (quantile statics)** | forcing + statics, enforced bucket | +0.346 | **+0.354** | first model to beat model8 blocked; M7 −0.11 |
+| nn-hybrid + SMIPS anchor (`--anchor`) | + site SMIPS climatological mean | **+0.387** | +0.339 | **21/37 stn>0, most of any single model**; anchor transfers only partially |
+| model6 / model8 / model9 (baselines) | | +0.38 / +0.408 / — | +0.355 / +0.322 / +0.35 | model9 rescued as an ensemble base |
 
-First untuned configuration (hidden 32, dev_scale 1, 3-member, no stratified
-weights). It does not beat model8 pooled, but it is the only model whose
-station-out **median** station is positive besides model8, and it has the best
-median |bias| and by far the best M-site transfer (M4 +0.54, M5 +0.75, M6 +0.45
-blocked; M7 −6.6 where every other model is −13 to −26). Station-wise vs
-model8: 12 wins / 20 losses — it fixes model8's worst failures (K2 +3.8,
-A5 +2.3, Y7 +0.8, K8 +0.7 NSE) and loses where model8 is already good.
-The two models' errors are again complementary.
+Every model's residual is dominated by per-station LEVEL, not dynamics
+(median r 0.77–0.83; oracle per-station de-bias → median ≈ +0.55–0.61 with
+35–37/37 positive) — the remaining headroom, and it needs information
+(a better satellite anchor, e.g. ESA CCI for this era), not architecture.
 
-### Preprocessing attribution and the quantile result
+## How we got here (findings ledger, chronological)
 
-The scaling question ("are we normalising as well as we can?") turned out to be
-the lever. Hybrid, all three treatments, both designs:
-
-| variant | station pooled / stn>0 / median | block pooled / block-median / blocks>0 |
-|---|---|---|
-| z-score | +0.352 / 19 / +0.02 | +0.244 / +0.03 / 5 |
-| **quantile** | +0.346 / 18 / −0.05 | **+0.354 / +0.30 / 7** |
-| quantile + stratified weights | +0.376 / 17 / −0.19 | +0.249 / +0.22 / 5 |
-| model8 (weighted) | +0.408 / 20 / +0.13 | +0.322 / +0.25 / 7 |
-
-- **Quantile scaling of the 37-row statics is what fixed blocked transfer**
-  (+0.244 → +0.354, beating model8's +0.322): with rank-normalised inputs no
-  station's outlying soil/terrain value can drag the parameter MLP, so the
-  physics extrapolates. It also cut M7 — the repo's worst station, −13 to −26
-  under every earlier model — to −0.11 station-out / −1.1 blocked.
-- **The stratified weights are redundant under quantile scaling** (they help
-  only z-score, where they mask the same outlier problem) and hurt blocked
-  ADELONG (−1.07 vs +0.34).
-- **mean(hybrid-quantile, model8)** from the cached OOF predictions is the best
-  result in the repo under BOTH designs: station +0.421 / 20 / +0.15,
-  block +0.374 / block-median +0.38. The two models' errors are complementary;
-  the average beats each everywhere it matters.
-
-### The stack (`emt.nn.stack`): a negative result, and the diversity win
-
-A learned convex gate (statics + base disagreement → softmax weights over the
-base predictions, zero-initialised at the plain mean, fold-disciplined) LOSES
-to equal weighting:
-
-| design | plain multi-base mean | gated stack |
-|---|---|---|
-| station (hybrid, model8, mlp, seq) | **+0.450** pooled | +0.439 |
-| block (hybrid, model8, model6) | **+0.401** pooled / stn-med **+0.12** / blk-med **+0.38** | +0.360 / +0.00 / +0.29 |
-
-Three further variants complete the picture (`handout/run_stack_variants.py`,
-`--gate-on regime`): global convex weights (3–4 params/fold) +0.400/+0.350,
-an affine level-capable ridge +0.367/+0.149 (a disaster — the convexity
-constraint was protecting, not costing), and a regime-conditioned gate
-(doy + recent forcing) +0.429/+0.376 — the least-bad learned combiner, still
-short of the mean. Even three fitted numbers per fold lose: the in-sample
-base ranking does not transfer from 37 sites. What
-the exercise surfaced instead is that **base diversity is the win**: the plain
-mean over three (blocked) / four (station) validated models is the repo's best
-result under both designs — blocked +0.401 pooled, block-median +0.38, median
-station +0.12 — with zero trainable parameters. That is the recommended
-combination.
+1. **MLP** at model6 parity on identical features; the lever was Gaussian
+   noise at 0.3σ on the 11 station-constant columns (the station-identity
+   leak); a static bottleneck traded M-sites for clusters — rejected.
+2. **NSE\*** (per-station variance-normalised loss) lifts low-variance dry
+   sites at no pooled cost; pooled NSE is a rescaled MSE, so only the
+   per-station form changes the optimum.
+3. **Transformer** matches the MLP without SMIPS; fixes some level outliers
+   (Y7, A4, K8) and gives it back elsewhere — a learned water balance drifts.
+   Scaling it (d=128, 4L) buys interpolation (+0.355 → +0.431) and no
+   transfer (+0.22 either size): the level wall is informational.
+4. **Hybrid** (differentiable model7 bucket, statics → bounded parameter
+   deviations, zero-initialised at model7): **quantile scaling of the 37-row
+   statics** is what fixed blocked transfer (+0.244 → +0.354 — the entire
+   gain; z-score let single stations set column scales, e.g. soil_bdw 3.8σ).
+   model8's stratified weights are redundant under it and hurt ADELONG.
+5. **Every trained combiner loses to equal weighting** (station/block pooled):
+   equal mean +0.450/+0.401 > regime gate +0.429/+0.376 > statics gate
+   +0.439/+0.360 > global convex 3-params +0.400/+0.350 > affine ridge
+   +0.367/+0.149. Even three fitted numbers per fold lose — the in-sample
+   base ranking does not transfer from 37 sites; level freedom is a disaster
+   (the convexity constraint protects). See `handout/modules/nn_stack.md`.
+6. **SMIPS level anchor**: each site's SMIPS climatological mean as a static.
+   Pooled corr with the true site mean is only 0.34, but 0.38–0.61 *within*
+   aridity terciles (Simpson's) — the net learns the conditional correction.
+   Station-out +0.387 / 21 positive; blocked a wash (the bias structure
+   differs by district).
+7. **Base diversity + robust combination** (median under blocked) is the
+   final recommendation — the "Current standings" table above.

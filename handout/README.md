@@ -54,9 +54,9 @@ then apply it. Each item links to a self-contained page.
 | 18 | [Temporal validation](modules/temporal_validation.md) | Leave-one-**year**-out across the drought break — time is the easy axis, space is the hard one |
 | 19 | [model10 · The hybrid](modules/model10.md) | Bucket storage as an ML feature — a negative result, with one instructive exception |
 | 20 | [nn-mlp · Neural net on model6 features](modules/nn_mlp.md) | model6 parity; static noise beats the station-identity leak |
-| 21 | [nn-transformer · Forcing sequence model](modules/nn_transformer.md) | model6-level skill with **no SMIPS**; a learned water balance drifts in level |
-| 22 | [nn-hybrid · Differentiable bucket](modules/nn_hybrid.md) | **Best blocked transfer** (+0.35 > model8's +0.32); quantile statics were the lever; M7 solved |
-| 23 | [nn-stack · Learned combiner](modules/nn_stack.md) | Negative result — but the diversity mean is the repo's best (blocked +0.40) |
+| 21 | [nn-transformer · Forcing sequence model](modules/nn_transformer.md) | No SMIPS; scaled (d=128) it is the best single-net interpolation (+0.43) — but scale buys no transfer |
+| 22 | [nn-hybrid · Differentiable bucket](modules/nn_hybrid.md) | **Best single-model blocked transfer** (+0.35 > model8's +0.32); quantile statics; the SMIPS level anchor (21/37 stations positive); M7 solved |
+| 23 | [nn-stack · Learned combiner](modules/nn_stack.md) | Every trained combiner loses to equal weighting — but the robust ensemble is the repo's best: **blocked +0.42 (8/9 blocks), station +0.48** |
 | 24 | [In-situ networks](modules/insitu_networks.md) | The loader contract, the survey of more data, and what is blocking it |
 | 25 | [Data quality](modules/qc.md) | Sentinels, two rejected detectors, and the calibration drift that bounds the record |
 
@@ -69,6 +69,13 @@ then apply it. Each item links to a self-contained page.
 | 23 | [Use the process model](modules/model8.md#run-it-for-any-date) | model8 for **any date** — point series or 30 m map, no SMIPS |
 
 ## The model
+
+> **Branch note (`neural-networks`).** The numbers below describe the shipped
+> single models. The current best results on this branch are **ensembles over
+> the model families** — blocked (the honest transfer test) pooled NSE
+> **+0.42** with 8/9 blocks and 22/37 stations positive, station-out
+> **+0.48** — via the neural-network track (pages 20–23, summarised on
+> [nn-stack](modules/nn_stack.md)).
 
 The recommended model is [**model6**](modules/model6.md): a regularised
 histogram gradient-boosting regressor that predicts the in-situ root-zone target

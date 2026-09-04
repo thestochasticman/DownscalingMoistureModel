@@ -162,8 +162,16 @@ spatially independent site-groups held out — the honest test for a national
 product) the shipped model8 transfers at pooled NSE ≈ +0.32 and model6's
 block-median falls to +0.09, with failures concentrated at the edges of the training climate range
 (see
-[blocked validation](handout/modules/blocked_validation.md)). The full story,
-including an earlier evaluation leak that was found and corrected, is in the
-[handout](handout/README.md).
+[blocked validation](handout/modules/blocked_validation.md)).
+
+**Branch `neural-networks` moves both headlines.** A differentiable-bucket
+model with rank-normalised statics beats model8 on blocked transfer (+0.35),
+a SMIPS climatological level anchor gives the most stations-positive of any
+single model (21/37), and robust ensembles over the model families reach
+**blocked pooled NSE +0.42 (8/9 blocks, 22/37 stations positive) and
+station-out +0.48** — see the
+[neural-network track](handout/modules/nn_mlp.md) (handout pages 20–23).
+The full story, including an earlier evaluation leak that was found and
+corrected, is in the [handout](handout/README.md).
 
 ![model6 leave-site-out results](handout/figures/model6_results.png)
