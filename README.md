@@ -204,8 +204,9 @@ all), and neither does a learned combiner.
 
 These are Murrumbidgee numbers. The full story — every model, the validation
 ladder, an evaluation leak that was found and corrected, and the negative
-results — is in the [handout](handout/README.md); the neural-network track is
-handout pages 20–23.
+results — is in the [handout](handout/README.md). The neural-network models and
+the differentiable bucket have their own **[standalone
+handout](handout/nn/README.md)**.
 
 ![Neural-network track results: ensemble fit, per-station NSE against model8, blocked per-block NSE, and the preprocessing attribution](handout/figures/nn_track_results.png)
 
