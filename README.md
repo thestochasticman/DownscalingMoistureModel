@@ -14,7 +14,13 @@ validates it in the Murrumbidgee catchment.
 > — a self-contained, prev/next-linked walkthrough of the whole pipeline and every
 > model. This page is setup + implementation.
 
-![Coarse SMIPS beside the generated 30 m field](handout/figures/downscale_gallery_paired.png)
+![Coarse SMIPS beside the generated 30 m field](handout/figures/downscale_gallery_ensemble.png)
+
+<sup>Kyeamba Creek through 2008: the ≈1 km SMIPS product as delivered (left)
+and the 30 m field generated over the same ground on the same day (right,
+ensemble median of model6, model8, model9 and nn-hybrid). Shared colour scale
+down each column, so the seasonal cycle — driest in January and late spring,
+wettest in the austral winter — is comparable across dates.</sup>
 
 ## Setup
 

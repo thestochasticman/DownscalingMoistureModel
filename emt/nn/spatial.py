@@ -30,9 +30,16 @@ MODEL_PATH = Path("data/models/nn_hybrid_q.pt")
 
 def hybrid_map(bbox, day, model_path: str | Path = MODEL_PATH,
                step_deg: float = m8p.GRID_STEP_DEG, chunk: int = 500_000,
-               verbose: bool = True) -> xr.Dataset:
-    """A 30 m root-zone soil-moisture field for any ``day`` (no SMIPS)."""
+               verbose: bool = True, snapshots=None) -> xr.Dataset:
+    """A 30 m root-zone soil-moisture field for any ``day`` (no SMIPS).
+
+    ``snapshots``: extra dates to read out from the SAME simulation. The bucket
+    is sequential, so one spin-up run passes through every earlier date -- a
+    nine-date gallery costs one simulation, not nine. Returns those fields as
+    additional data variables named ``sm_pred_<YYYY-MM-DD>``.
+    """
     day = m8p._as_date(day)
+    snaps = sorted({m8p._as_date(d) for d in (snapshots or [])} | {day})
     model = HybridModel.load(model_path)
     cfg = model.data
     sim_start = m8p._spinup_start(day)
@@ -70,6 +77,13 @@ def hybrid_map(bbox, day, model_path: str | Path = MODEL_PATH,
     iy = np.abs(gy.ravel()[:, None] - lats[None, :]).argmin(1)
     cell = (iy * len(lons) + ix).astype(np.int64)
 
+    # row index of each requested date in the forcing series (daily from sim_start)
+    n_days = rain.shape[0]
+    rows = {d: (d - sim_start).days for d in snaps}
+    if any(r < 0 or r >= n_days for r in rows.values()):
+        raise ValueError(f"snapshot dates outside the forcing window "
+                         f"({sim_start} .. {day}, {n_days} days)")
+
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     rain_t = torch.as_tensor(rain, dtype=torch.float32, device=dev)   # (T, n_cells)
     pet_t = torch.as_tensor(pet, dtype=torch.float32, device=dev)
@@ -78,37 +92,43 @@ def hybrid_map(bbox, day, model_path: str | Path = MODEL_PATH,
                          dtype=torch.float32, device=dev)
     cell_t = torch.as_tensor(cell, device=dev)
 
-    pred = np.full(len(S), np.nan, dtype="float32")
+    preds = {d: np.full(len(S), np.nan, dtype="float32") for d in snaps}
     idx_all = np.flatnonzero(valid)
     if verbose:
-        print(f"  simulating {len(idx_all):,} pixels x {rain.shape[0]} days "
-              f"x {len(model.nets)} members on {dev} ...", flush=True)
+        print(f"  simulating {len(idx_all):,} pixels x {n_days} days x "
+              f"{len(model.nets)} members on {dev} "
+              f"({len(snaps)} snapshot date(s)) ...", flush=True)
+    want = {r: d for d, r in rows.items()}
     with torch.no_grad():
         for start in range(0, len(idx_all), chunk):
-            idx = torch.as_tensor(idx_all[start:start + chunk], device=dev)
+            sl = slice(start, start + chunk)
+            idx = torch.as_tensor(idx_all[sl], device=dev)
             sz, cl = Sz[idx], cell_t[idx]
-            acc = torch.zeros(len(idx), device=dev)
+            acc = {d: torch.zeros(len(idx), device=dev) for d in snaps}
             for net in model.nets:
                 bucket = net.net.to(dev)
-                p = bucket.params(sz)
-                smax, alpha, k, theta_r, dtheta = p.unbind(1)
+                smax, alpha, k, theta_r, dtheta = bucket.params(sz).unbind(1)
+                off = (bucket.offset(sz).squeeze(-1) if bucket.offset is not None
+                       else torch.zeros(len(idx), device=dev))
                 s = 0.5 * smax
                 denom = alpha * smax
-                for t in range(rain_t.shape[0]):
+                for t in range(n_days):
                     s = s + rain_t[t, cl]
                     aet = pet_t[t, cl] * torch.clamp(s / denom, max=1.0)
                     s = torch.clamp(s - aet - k * s, min=0.0)
                     s = torch.minimum(s, smax)
-                vwc = theta_r + dtheta * s / smax
-                if bucket.offset is not None:
-                    vwc = vwc + bucket.offset(sz).squeeze(-1)
-                acc += vwc
-            pred[idx_all[start:start + chunk]] = (acc / len(model.nets)).cpu().numpy()
+                    if t in want:
+                        acc[want[t]] += theta_r + dtheta * s / smax + off
+            for d in snaps:
+                preds[d][idx_all[sl]] = (acc[d] / len(model.nets)).cpu().numpy()
     if verbose:
-        print(f"  predicted {len(idx_all):,} pixels, mean {np.nanmean(pred):.1f}%",
-              flush=True)
-    return xr.Dataset({"sm_pred": (grid.dims, pred.reshape(grid.shape))},
-                      coords=grid.coords).rio.write_crs(grid.rio.crs)
+        for d in snaps:
+            print(f"  {d}: mean {np.nanmean(preds[d]):.1f}%", flush=True)
+    out = {"sm_pred": (grid.dims, preds[day].reshape(grid.shape))}
+    for d in snaps:
+        if d != day:
+            out[f"sm_pred_{d}"] = (grid.dims, preds[d].reshape(grid.shape))
+    return xr.Dataset(out, coords=grid.coords).rio.write_crs(grid.rio.crs)
 
 
 def main():
