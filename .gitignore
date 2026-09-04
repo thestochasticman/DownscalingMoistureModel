@@ -6,6 +6,10 @@
 *.zarr/
 *.tif
 
+# locally refitted artefacts (environment-specific; regenerate with
+# persist.fit_cached -- see handout/modules/predict.py.md#compatibility)
+data/models/*_sk19.joblib
+
 # python
 __pycache__/
 *.py[cod]
