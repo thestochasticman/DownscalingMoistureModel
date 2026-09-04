@@ -45,6 +45,38 @@ diagnosis — keep the enforced bucket, learn only its parameters — is exactly
 
 ![nn-transformer per-station held-out time series](../figures/nn_seq_per_station.png)
 
+## Not yet tested: giving it SMIPS
+
+The model excludes SMIPS by design — that is what buys "runs for any date"
+and what makes it diverse from the ML track inside the
+[ensemble](nn_stack.md). But the ML track shows SMIPS carries real skill, so
+the experiment is worth running. Two routes:
+
+* **As a sixth sequence channel** — blocked by data, not by code: the cached
+  feature table starts 2006-03-01, so the earliest target day has no 365-day
+  SMIPS history. It needs a fresh per-station SMIPS fetch back to 2005
+  (public TERN WCS, no key — the same fetch that built the training table).
+* **As per-sample features on the static token** — the backward-looking
+  aggregates (`smips_totalbucket`, `smips_7d/30d/365d`, `smips_anom`) are
+  already in `data/model6_features_2006_2010.csv` and already leakage-safe.
+  This is the cheap version: the static token becomes
+  `[station statics | SMIPS aggregates as of the target day]`, no new
+  downloads, no window problem.
+
+What to expect, from evidence already in hand — stated in advance so the
+result is a test rather than a story:
+
+| | expectation | basis |
+|---|---|---|
+| station-out | **improves** | SMIPS-fed models beat the no-SMIPS hybrid by a median +0.47 NSE at mid-aridity stations (≈0 at dry and wet ones) |
+| blocked | **little or no gain** | every SMIPS-fed model transfers worst — nn-mlp +0.17 pooled, model6 block-median +0.09 |
+| ensemble value | **may fall** | this model's seat is partly earned by being the SMIPS-free sequence model; correlating it with model6/nn-mlp costs diversity, and diversity is what beat every trained combiner |
+| "any date" property | **lost** | a SMIPS-fed variant can only run where SMIPS exists, unlike model8 and the hybrid |
+
+The honest framing is that this buys *interpolation* skill next to
+instrumented sites and probably costs transfer and ensemble diversity — so
+it should be added as a **separate base**, not as a replacement.
+
 ## Reproduce
 
 ```bash

@@ -74,6 +74,26 @@ view; compare the same grid on the [model8](model8.md) and
 
 ![recommended ensemble per-station held-out time series](../figures/nn_ens_per_station.png)
 
+### Does each member earn its seat?
+
+The blocked pick keeps [model6](model6.md) even though model6's *solo*
+block-median is the weakest of the five (+0.09). Leave-one-member-out says
+it earns the seat, modestly:
+
+| blocked ensemble | pooled | stn > 0 | blk-median | blocks > 0 |
+|---|---|---|---|---|
+| median(hyb, hybA, m8, m6, m9) | **+0.417** | 22/37 | **+0.42** | 8/9 |
+| same, minus model6 | +0.395 | 22/37 | +0.39 | 8/9 |
+| best of all combinations **with** model6 | +0.421 | | | |
+| best of all combinations **without** model6 | +0.406 | | | |
+
+Worth ≈ +0.02 pooled — real, consistent (model6 appears in every top-six
+blocked combination), and not decisive: the stations- and blocks-positive
+counts are unchanged without it. The reason a weak transferer helps is the
+same diversity argument as above — model6 is the only member that is pure-ML
+and SMIPS-fed, so its errors are the least correlated with the four
+process-track members.
+
 ## Reproduce
 
 ```bash
