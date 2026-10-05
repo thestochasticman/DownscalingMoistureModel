@@ -1,6 +1,6 @@
 [project]
 name = "emt"
-version = "0.1.0"
+version = "0.2.0+gadi"
 description = "Downscaling SMIPS ~1 km soil moisture to ~30 m topographic resolution, trained and validated against the OzNet Murrumbidgee in-situ network."
 requires-python = ">=3.11"
 # EMT runs inside the PaddockTS environment and imports PaddockTS directly for
@@ -13,6 +13,19 @@ dependencies = [
     "xlrd",          # legacy .xls reader for OzNet in-situ files
     "scipy",         # model7 bucket-parameter calibration (Nelder-Mead)
     "torch",         # neural-network track (CUDA; install the cu12x wheel for the GPU)
+    # gadi branch: covariates come from the lab's stores (emt.sources) and are
+    # put on the Sentinel-2 grid by emt.regrid. Each store keeps its native
+    # lattice; nothing is resampled before emt.regrid.
+    "troi-core @ git+https://github.com/thestochasticman/troi.git@gadi",
+    "pysmips @ git+https://github.com/thestochasticman/pysmips.git@gadi",
+    "pysilo-store @ git+https://github.com/thestochasticman/pysilo.git@gadi",
+    "pyozwald @ git+https://github.com/thestochasticman/pyozwald.git@gadi",
+    "pyslga @ git+https://github.com/thestochasticman/pyslga.git@gadi",
+    "pycopdem @ git+https://github.com/thestochasticman/pycopdem.git@gadi",
+    "pysentinel2 @ git+https://github.com/thestochasticman/pysentinel2.git@gadi",
+    "pyproj",
+    "rasterio",
+    "zarr>=3",
 ]
 
 [build-system]

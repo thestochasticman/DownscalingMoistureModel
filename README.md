@@ -22,6 +22,47 @@ ensemble median of model6, model8, model9 and nn-hybrid). Shared colour scale
 down each column, so the seasonal cycle — driest in January and late spring,
 wettest in the austral winter — is comparable across dates.</sup>
 
+## On Gadi: covariates from the lab stores, exactly regridded
+
+The `gadi` branch adds two modules that replace the per-source WCS /
+COG / point loaders for dataset building on Gadi:
+
+- **`emt.sources`** reads every covariate from the lab's stores
+  (`pysmips`, `pysilo`, `pyozwald`, `pyslga`, `pycopdem`, `pysentinel2`,
+  all on their `gadi` branches). The stores keep each source's native
+  lattice, fill once per pixel-day from many PBS jobs on many nodes, and
+  audit completeness with `gaps()`; `emt.sources.gaps(bbox, start, end)`
+  runs all six audits.
+- **`emt.regrid`** puts them on the Sentinel-2 grid (EPSG:6933, 10 m)
+  without loss. Every source is coarser than 10 m and in EPSG:4326, and
+  both CRSs are cylindrical, so each 10 m pixel maps to the native pixel
+  containing its centre with two integer index arrays — *block
+  replication*: no interpolation, every value a native value. The maps
+  are kept (`smips_source_row/col`), so a 10 m field can be averaged
+  back to the SMIPS pixel it came from (`emt.sources.mass_balance`), the
+  check that a downscaled field conserves the coarse value. Bilinear
+  upsampling exists only as an opt-in for elevation; terrain derivatives
+  are computed on the native 30 m DEM (with a buffer) and replicated.
+  A regridded dataset carries `attrs['regrid']` and cannot be regridded
+  again.
+
+```bash
+# fill the stores for an AOI-year, audit them, write the aligned 10 m stack
+PYTHONPATH=. python -m emt.sources --bbox 147.30 -35.52 147.62 -35.10 \
+    --start 2020-01-01 --end 2020-12-31 --out /scratch/.../kyeamba_2020.zarr
+```
+
+```python
+from emt import sources
+st = sources.statics(bbox)                       # soil + terrain, regridded once
+for frame in sources.frames(bbox, start, end):   # SMIPS, SILO, OzWALD per 64-day chunk
+    coarse = sources.mass_balance(frame, prediction)   # back to the SMIPS pixel
+```
+
+The OzNet training-table builder (`emt.build_dataset`, `emt.features`)
+and the legacy per-query loaders still import the previous PaddockTS
+API; moving them onto `emt.sources` is the next step on this branch.
+
 ## Setup
 
 EMT runs inside the **PaddockTS** environment and imports PaddockTS directly for
