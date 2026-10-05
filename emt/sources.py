@@ -73,8 +73,7 @@ def ozwald(bbox, start: date, end: date, cadence: str = 'daily', variables=None,
 
 
 def _res_name(res: float) -> str:
-    m = round(res * 111_320)
-    return f'{m}m' if m < 1000 else f'{round(m / 1000)}km'
+    return {0.005: '500m', 0.05: '5km', 0.1: '10km'}.get(res, f'{res}deg')
 
 
 def soil(bbox, attributes=SOIL_ATTRIBUTES, depths=SOIL_DEPTHS, **kw) -> xr.Dataset:
@@ -188,7 +187,10 @@ def build(bbox, start: date, end: date, out: str, chunk_days: int = 64, with_sen
         print(f'statics: {list(st.data_vars)} -> {out}', flush=True)
     first = True
     for frame in frames(bbox, start, end, chunk_days=chunk_days, with_sentinel2=with_sentinel2):
-        dyn = frame.drop_vars([v for v in frame.data_vars if 'time' not in frame[v].dims])
+        static_vars = [v for v in frame.data_vars if 'time' not in frame[v].dims]   # the index maps
+        if first and static_vars:
+            frame[static_vars].to_zarr(out, mode='a')
+        dyn = frame.drop_vars(static_vars)
         dyn.to_zarr(out, mode='a', append_dim=None if first else 'time')
         first = False
         if verbose:
