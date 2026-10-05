@@ -10,7 +10,7 @@ source            native      into the 10 m stack     why
 ================  ==========  ======================  ===========================
 SMIPS             ~1 km       replicate + source idx  target: recoverable exactly
 SILO              5 km        replicate               forcing; no sub-cell structure
-OzWALD daily      500 m*      replicate               forcing
+OzWALD daily      0.005/0.05/0.1°  replicate         forcing; one source per lattice
 OzWALD 8-day      500 m       replicate, 8-day time   model handles cadence
 SLGA              90 m        replicate               textures: interpolation mixes
 COP-DEM elevation 30 m        bilinear (opt-in)       continuous input
@@ -18,7 +18,9 @@ COP-DEM slope...  30 m        native w/ buffer, rep.  derivatives from native DE
 Sentinel-2        10 m        as is                   already on the grid
 ================  ==========  ======================  ===========================
 
-(*the daily meteorology is a ~5 km product delivered on the 500 m lattice.)
+(OzWALD daily variables sit on three lattices -- Tmax/Tmin at 0.005°,
+Pg at 0.05°, winds/vapour/radiation at 0.1° -- so they enter the stack
+as ``ozwald_500m_*``, ``ozwald_5km_*`` and ``ozwald_10km_*``.)
 
 Everything is a plain function of ``bbox`` and dates; the stores take
 care of caching, concurrency across Gadi nodes, and the ``gaps()``
@@ -56,10 +58,23 @@ def silo(bbox, start: date, end: date, variables=SILO_VARS, **kw) -> xr.Dataset:
     return Store(**kw).get_ds(bbox, start, end, variables=variables)
 
 
-def ozwald(bbox, start: date, end: date, cadence: str = 'daily', variables=None, **kw) -> xr.Dataset:
+def ozwald(bbox, start: date, end: date, cadence: str = 'daily', variables=None, **kw) -> dict:
+    """``{'ozwald_500m': ds, 'ozwald_5km': ds, ...}``: one native dataset per
+    lattice the requested variables sit on (OzWALD daily variables span
+    three)."""
     from pyozwald.store import Store
+    store = Store(**kw)
     variables = variables or (OZWALD_DAILY_VARS if cadence == 'daily' else OZWALD_8DAY_VARS)
-    return Store(**kw).get_ds(bbox, start, end, cadence=cadence, variables=variables)
+    out = {}
+    for res, group in store.lattices(cadence, variables, years=range(start.year, end.year + 1)).items():
+        name = f'ozwald_{_res_name(res)}' if cadence == 'daily' else f'ozwald8_{_res_name(res)}'
+        out[name] = store.get_ds(bbox, start, end, cadence=cadence, variables=group)
+    return out
+
+
+def _res_name(res: float) -> str:
+    m = round(res * 111_320)
+    return f'{m}m' if m < 1000 else f'{round(m / 1000)}km'
 
 
 def soil(bbox, attributes=SOIL_ATTRIBUTES, depths=SOIL_DEPTHS, **kw) -> xr.Dataset:
@@ -143,7 +158,7 @@ def frames(bbox, start: date, end: date, chunk_days: int = 64, with_sentinel2: b
         stop = min(end, cur + timedelta(days=chunk_days - 1))
         native = {'smips': smips(bbox, cur, stop, **kw), 'silo': silo(bbox, cur, stop, **kw)}
         if with_ozwald:
-            native['ozwald'] = ozwald(bbox, cur, stop, 'daily', **kw)
+            native.update(ozwald(bbox, cur, stop, 'daily', **kw))
         if with_sentinel2:
             native['sentinel2'] = sentinel2(bbox, cur, stop, **kw)
         yield align(native, bbox)
