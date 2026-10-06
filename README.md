@@ -59,6 +59,51 @@ for frame in sources.frames(bbox, start, end):   # SMIPS, SILO, OzWALD per 64-da
     coarse = sources.mass_balance(frame, prediction)   # back to the SMIPS pixel
 ```
 
+### How the stack is built
+
+```mermaid
+flowchart LR
+    subgraph stores ["lab stores · native grids · gadi branches"]
+        direction TB
+        SM["pysmips ~1 km"]
+        SI["pysilo 5 km"]
+        OZ["pyozwald 500 m · 5 km · 10 km"]
+        SL["pyslga 90 m"]
+        CD["pycopdem 30 m<br/>derivatives with a buffer"]
+        S2["pysentinel2 10 m EPSG:6933"]
+    end
+    subgraph src ["emt.sources"]
+        direction TB
+        GP["gaps(): the six audits"]
+        AL["align(): every native read<br/>onto s2_window(bbox)"]
+        FR["frames(): 64-day chunks<br/>statics(): soil + terrain once"]
+    end
+    subgraph rg ["emt.regrid"]
+        direction TB
+        IM["index_maps<br/>rows[], cols[] — exact and separable<br/>because both CRSs are cylindrical"]
+        RP["replicate<br/>native[rows, cols]: every value a native value"]
+        BL["smooth_upsample<br/>bilinear, opt-in, elevation only"]
+        AG["aggregate · coverage<br/>bincount back to the native pixel"]
+    end
+    SM --> AL
+    SI --> AL
+    OZ --> AL
+    SL --> AL
+    CD --> AL
+    S2 -->|"already on the grid"| FR
+    AL --> IM --> RP --> FR
+    IM --> BL --> FR
+    FR --> ST[("AOI stack · zarr<br/>(time, y, x) at 10 m<br/>+ smips_source_row / col")]
+    ST -->|"a 10 m prediction"| AG -->|"mean per SMIPS pixel equals SMIPS"| MB(["mass balance"])
+```
+
+Every regridded variable carries `attrs['regrid']` naming the native
+transform and the method, and `emt.regrid.regrid` refuses a dataset
+that already has it. The stores never resample, the stack is the only
+place regridding happens, and it happens once. Shared store structure
+is explained in
+[troi/docs/ledger.md](https://github.com/thestochasticman/troi/blob/gadi/docs/ledger.md).
+
 The OzNet training-table builder (`emt.build_dataset`, `emt.features`)
 and the legacy per-query loaders still import the previous PaddockTS
 API; moving them onto `emt.sources` is the next step on this branch.
