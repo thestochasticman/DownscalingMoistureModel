@@ -104,6 +104,14 @@ place regridding happens, and it happens once. Shared store structure
 is explained in
 [troi/docs/ledger.md](https://github.com/thestochasticman/troi/blob/gadi/docs/ledger.md).
 
+> **Status on the `data` branch.** `emt.sources` and `emt.regrid` were written
+> in haste to make one AOI build work. They align sources by date alone,
+> drop provenance and units, and replicate everything to 10 m at build time.
+> The challenges a careful combination of the six sources has to meet, and
+> the shape of the layer that will replace them, are set out in
+> [docs/combining-sources.md](docs/combining-sources.md). `emt` itself is a
+> legacy name; the new layer will be a separate, properly named package.
+
 The OzNet training-table builder (`emt.build_dataset`, `emt.features`)
 and the legacy per-query loaders still import the previous PaddockTS
 API; moving them onto `emt.sources` is the next step on this branch.
