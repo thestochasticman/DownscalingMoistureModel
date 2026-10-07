@@ -234,3 +234,14 @@ upstream on build day" is permanent.
   model: validity mask only, or mask plus days-since-observation.
 - Whether rainfall is treated as a state for mapping purposes (plain
   replication) or as a flux with coverage recorded.
+
+## Related work
+
+A literature survey of comparable efforts (temporal stability and scaling of
+sub-pixel soil moisture, downscaling method families, dense-network
+validation, learning spatial fields from few labels, and US and European
+fine-scale products) is in [related-work.md](related-work.md). Its conclusion
+for this design: a few stations can calibrate the amplitude of a fine-scale
+pattern but cannot learn its shape, so the pattern must be supplied by a
+low-parameter model or an observed carrier and validated against airborne
+or dense references, not station error.
